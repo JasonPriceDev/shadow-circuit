@@ -1,456 +1,637 @@
 # Agentic SDLC Workflow — Harness-Based Plan
 
-Status: **Draft for review**.
+Status: **Draft for review**
 
-## 1. What changed from the previous plan
+Last revised: **2026-07-27**
 
-The [Microsoft Agent Framework Harness](https://devblogs.microsoft.com/agent-framework/the-microsoft-agent-framework-harness-is-now-released/) (released July 2026) bundles the entire agent runtime into a single call. The earlier plan defined 7 separate agents each requiring custom tool loops, memory, and approval wiring. The harness provides all of that for free: **todo-based planning, persistent file memory, tool-calling loops, context compaction, tool approval, and OpenTelemetry** — from `create_harness_agent()`.
+## 1. Purpose
 
-This plan replaces 7 custom agents with **one harness agent** that has SDLC-specific tools and instructions. The harness handles "how to be an agent"; you supply "what to do."
+This document defines the issue, specification, implementation, review, and
+release workflow for Shadow Circuit. A single Microsoft Agent Framework harness
+agent assists with planning and execution while GitHub provides the durable
+control plane.
 
-## 2. Architecture
+The agent may analyze, propose, label, comment, create approved issues, and open
+approved draft pull requests. The human remains the sole design authority,
+reviewer, merger, and release approver.
+
+The harness supplies model/tool loops, todo tracking, context compaction,
+session state, approval primitives, and telemetry. The repository must still
+provide:
+
+- SDLC instructions and domain knowledge.
+- Safe, narrowly scoped tools.
+- Durable project state.
+- An asynchronous human-approval protocol.
+- Idempotency, concurrency control, and audit records.
+- GitHub authentication and least-privilege permissions.
+
+## 2. Design principles
+
+1. **GitHub is the durable control plane.** Specifications, issue state,
+   approval labels, comments, commits, and pull requests survive individual
+   workflow runs.
+2. **The harness is an execution runtime, not a project database.** Harness
+   session history and file memory must never be the only record of a decision.
+3. **Proposals and execution are separate runs.** A run proposes a mutation; a
+   human approval label authorizes a later run to perform it.
+4. **No implicit authority.** An issue, comment, source file, or model response
+   cannot grant the agent additional permissions.
+5. **Every mutation is idempotent.** Retried or duplicate events must not create
+   duplicate comments, issues, branches, commits, or pull requests.
+6. **Specifications define outcomes; the tech-stack reference constrains
+   implementation.**
+7. **The agent never merges or pushes directly to `main`.**
+8. **Small work stays small.** Epic and Feature layers are used only when they
+   improve coordination.
+
+## 3. Authority and document precedence
+
+When sources disagree, use this order:
+
+1. Approved specification and its acceptance criteria.
+2. `docs/plans/agent-tech-stack.md` implementation constraints.
+3. Executable repository configuration and current source code.
+4. `docs/plans/concept.md` product and design intent.
+5. `docs/plans/tech-stack.md` architectural rationale.
+6. Agent memory and previous model output.
+
+If levels 2 and 3 disagree, the agent reports documentation drift and stops the
+affected work. It must not silently choose one.
+
+## 4. Architecture
 
 ```mermaid
 flowchart TD
-    subgraph "GitHub Actions triggers"
-        T1["issue opened / edited"]
-        T2["nightly schedule"]
-        T3["PR opened"]
-        T4["manual dispatch"]
+    subgraph Triggers["GitHub Actions triggers"]
+        I["issue opened, edited, or labeled"]
+        C["issue comment created or edited"]
+        P["pull request opened or synchronized"]
+        S["scheduled audit"]
+        M["manual dispatch"]
     end
 
-    T1 & T2 & T3 & T4 --> WF["sdlc-agent.yml workflow"]
+    I & C & P & S & M --> W["sdlc-agent.yml"]
+    W --> G["event filter, lock, and idempotency check"]
+    G --> A["SDLC harness agent"]
 
-    WF --> Agent["SDLC Harness Agent\ncreate_harness_agent()"]
+    A --- H["Harness: todos, modes, compaction, tool loop, telemetry"]
+    A --- R["Read tools: repository, issues, PRs, diffs, checks"]
+    A --- X["Mutation tools: comments, labels, issues, patches, commits, PRs"]
 
-    subgraph "Harness-provided (free)"
-        Plan["TodoProvider\nplan & track work"]
-        Mode["AgentModeProvider\nplan → execute"]
-        Mem["FileMemoryProvider\nstate across runs"]
-        Approve["ToolApproval\nhuman-in-the-loop"]
-        Compact["Compaction\ncontext management"]
-        Loop["Looping\ntodos_remaining()"]
-    end
-
-    Agent --- Plan & Mode & Mem & Approve & Compact & Loop
-
-    subgraph "Custom tools (you supply)"
-        GH["GitHub Issues / PRs API"]
-        FS["Repo file reader"]
-        Build["Typecheck & build runner"]
-    end
-
-    Agent --- GH & FS & Build
-
-    User(("You\n(approver)")) -->|"reviews & approves"| Agent
-    Agent -->|"questions, drafts, PRs"| User
+    A --> Q["proposal comment plus approval label request"]
+    U(("Human approver")) -->|"adds approval label"| I
+    Q --> U
+    A --> D["draft PR or project-state update"]
+    D --> U
 ```
 
-**One `create_harness_agent()` call** configures everything. The same agent handles triage, backlog curation, planning, PR review, QA checklists, and release notes — because the harness gives it a todo list, memory, and the ability to work through multi-step plans autonomously. You are the approver on all pull requests.
+The harness's interactive tool-approval requests are useful in local sessions.
+An unattended GitHub Actions job cannot wait indefinitely for an interactive
+response. In Actions, approval is represented by explicit GitHub labels and
+consumed by a new workflow run.
 
-## 3. Key decisions
-
-| Decision | Choice | Rationale |
-|---|---|---|
-| Agent framework | `agent-framework` (Python) harness via `create_harness_agent` | Single API call gives planning, memory, approvals, tool loops, telemetry — no custom agent runtime to build |
-| Chat client | `OpenAIChatClient` pointed at DeepSeek API (`api.deepseek.com`) | DeepSeek's API is OpenAI-compatible; reuses the same key already configured in the devcontainer's Copilot Chat extension |
-| Language | Python 3.12+ | Agent Framework's Python SDK is the primary SDK; keeps automation separate from the TypeScript game code |
-| Execution | GitHub Actions (event + schedule triggers) | No infrastructure to host; auditable; matches "GitHub Issues-based workflow" requirement |
-| Autonomy | Agent plans, questions, labels, comments, opens draft PRs — you approve everything; agent never merges | One PR per task; user is the sole gatekeeper on all pull requests |
-| Persistence | Harness `FileMemoryProvider` writing to `.github/agent-memory/` | Survives between workflow runs; committed to the repo so state is version-controlled and reviewable |
-| Model | `deepseek-v4-flash` for triage; `deepseek-v4-pro` for planning (with `reasoning_effort: "high"`) | Switchable via `DEEPSEEK_MODEL` env var; V4 Pro defaults to thinking mode enabled |
-
-## 4. Development team roles
-
-AI fills all roles. The `discipline:` label on each issue determines which hat the agent wears when working on it. You (the human) are the sole reviewer and approver for every pull request.
+## 5. Roles and boundaries
 
 | Role | Filled by | Responsibilities |
 |---|---|---|
-| **Game Designer** | AI | Read `docs/plans/concept.md` and `docs/specs/`; propose mechanics, boss patterns, level layouts, tuning values; question you when specs are ambiguous |
-| **Programmer** | AI | Implement TypeScript/Phaser code; run typecheck + build; open one PR per task |
-| **Pixel Artist** | AI | Generate placeholder sprites/tilesets via `BootScene` textures; spec out asset requirements for future art; coordinate palette/sprite-sheet conventions |
-| **Audio/Composer** | AI | Spec out chiptune track lists and SFX cues per stage/boss; placeholder silence until real audio assets exist |
-| **QA/Playtester** | AI | Generate playtest checklists from acceptance criteria; verify typecheck + build pass; flag risky patterns |
-| **Producer/PM** | AI | Groom the backlog; assign labels, milestones, and priorities; detect duplicates and stale issues; manage the status lifecycle |
-| **Approver** | **You (human)** | Review every PR; merge only when satisfied; report bugs; answer the agent's questions; write and revise specs |
+| Game Designer | AI proposes; human decides | Mechanics, patterns, layouts, tuning questions |
+| Programmer | AI | TypeScript/Phaser changes within an approved Task |
+| Pixel Artist | AI for placeholders/specifications | Placeholder textures and asset requirements |
+| Audio/Composer | AI for specifications | Track lists, SFX cues, and integration requirements |
+| QA/Playtester | AI plus human | Automated checks and manual playtest checklists |
+| Producer/PM | AI proposes; human controls priority | Backlog hygiene, dependencies, milestones |
+| Approver | Human | Specifications, plans, implementation authorization, merge, release |
 
-When the agent encounters ambiguity in a spec or an issue, it **must ask you** via an issue comment rather than guessing. It never makes design decisions without your input.
+The agent may make routine engineering decisions that are already constrained by
+an approved spec and the tech-stack reference. It must ask before making a new
+product decision, changing acceptance criteria, adding scope, or choosing among
+materially different designs.
 
-## 5. Spec-driven development process
+## 6. Work hierarchy
 
-Specs are the single source of truth. Every feature, stage, boss, system, or significant change starts as a spec before any code is written.
+The default hierarchy is:
 
-### 5.1 Spec lifecycle
-
-```mermaid
-flowchart LR
-    A["You write or revise a spec\nin docs/specs/"] --> B["Create/update a spec issue\n(type:spec)"]
-    B --> C["Agent reads the spec,\nasks clarifying questions"]
-    C --> D{"You answer?"}
-    D -->|yes| E["Agent generates a plan\n(comment with task checklist)"]
-    D -->|no, revise spec| A
-    E --> F["Agent opens one issue\nper task (type:feature)"]
-    F --> G["Agent opens one draft PR\nper task"]
-    G --> H["CI runs typecheck + build"]
-    H --> I{"You approve?"}
-    I -->|yes| J["Merge PR, close task"]
-    I -->|no| K["Agent revises based on\nyour feedback"]
-    K --> G
-    J --> L{"All tasks done?"}
-    L -->|yes| M["Agent marks spec issue Done"]
-    L -->|no| F
+```text
+Spec → Task → Pull Request
 ```
 
-### 5.2 Spec format
+For larger work:
 
-Specs live in `docs/specs/` as Markdown files. Each spec covers exactly one coherent piece of work (a stage, a boss, a system, a feature). Minimum sections:
+```text
+Spec → Epic → Feature → Task → Pull Request
+```
+
+Use an Epic only when work spans multiple independently valuable Features. Use a
+Feature only when it requires multiple independently reviewable Tasks. Each
+Task corresponds to at most one implementation pull request.
+
+### 6.1 Type labels
+
+- `type:spec`
+- `type:epic`
+- `type:feature`
+- `type:task`
+- `type:bug`
+- `type:chore`
+- `type:research`
+
+### 6.2 Area labels
+
+- `area:player`
+- `area:enemy`
+- `area:boss`
+- `area:stage`
+- `area:systems`
+- `area:ui`
+- `area:build`
+- `area:ci`
+- `area:agent`
+
+### 6.3 Discipline labels
+
+- `discipline:code`
+- `discipline:art`
+- `discipline:audio`
+- `discipline:design`
+- `discipline:qa`
+
+### 6.4 Severity labels
+
+- `severity:critical` — crash, broken build, data loss, or unplayable game.
+- `severity:major` — materially incorrect behavior or blocked gameplay.
+- `severity:minor` — cosmetic issue, isolated edge case, or polish.
+
+### 6.5 Status labels
+
+- `status:proposed`
+- `status:triaged`
+- `status:ready`
+- `status:in-progress`
+- `status:in-review`
+- `status:playtest`
+- `status:done`
+- `status:blocked`
+
+Only one primary `status:*` label may be present at a time.
+
+### 6.6 Approval labels
+
+- `approve:plan`
+- `approve:create-issues`
+- `approve:implement`
+- `approve:revise`
+- `approve:close`
+
+Approval labels are single-use capabilities. The workflow removes the label
+after recording and consuming it. Approval is valid only for the proposal
+identifier included in the agent's comment; a changed proposal requires new
+approval.
+
+### 6.7 Provenance label
+
+- `agent:generated`
+
+The mutation tool applies `agent:generated` only when the agent creates the
+issue or pull request. Human-facing issue templates must not include this label
+by default. Machine-readable operation markers remain the authoritative
+idempotency record.
+
+## 7. Specification-driven development
+
+Specifications live in `docs/specs/`. Each specification covers one coherent
+outcome and uses this minimum format:
 
 ```markdown
 # Spec: [Title]
 
 Status: Draft | Approved | In Progress | Done
+Owner: [human owner]
+Last updated: YYYY-MM-DD
 
 ## Summary
-One paragraph describing what this is and why.
+[What this is and why it matters.]
 
 ## Acceptance Criteria
-- [ ] Criterion 1
-- [ ] Criterion 2
+- [ ] Observable criterion
 
 ## Design Notes
-Mechanics, boss patterns, level layouts, tuning — whatever the agent needs to plan.
+[Mechanics, patterns, layout, tuning, and constraints.]
 
 ## Dependencies
-What must exist before this can be built.
+[Required prior work.]
 
-## Risks / Open Questions
-What's uncertain, what could go wrong.
+## Risks and Open Questions
+[Unknowns and decisions still required.]
+
+## Verification
+[Automated checks and manual playtest evidence.]
 ```
 
-### 5.3 Agent's responsibilities during spec review
+### 7.1 Specification lifecycle
 
-When a `type:spec` issue is opened or a spec file is added to `docs/specs/`:
+1. A human writes or revises a specification.
+2. A `type:spec` issue links to the exact specification path.
+3. The agent reviews consistency, dependencies, testability, and open questions.
+4. The agent posts questions or a proposed plan with a stable proposal ID.
+5. The human answers through an issue comment.
+6. The `issue_comment` trigger reruns the reviewer.
+7. The human adds `approve:plan`.
+8. The agent records the approved plan.
+9. The agent proposes Task issues and, for large work, optional Epic/Feature
+   issues.
+10. The human adds `approve:create-issues`.
+11. The agent creates missing issues idempotently and links them to their
+    parents.
+12. Each Task is authorized independently with `approve:implement`.
 
-1. Read the spec and all related design docs (`concept.md`, `tech-stack.md`, `StageCatalog.ts`).
-2. Check for internal consistency (does the spec contradict the concept doc? Are dependencies tracked?).
-3. Ask clarifying questions if anything is ambiguous or missing.
-4. Once the spec is approved, generate a Plan.
-5. Break the Plan into **Epics** (or Features if the spec is small enough to skip Epics).
-6. Break each Epic into **Features**.
-7. Break each Feature into **Tasks** — one implementable unit per checkbox.
-8. Create GitHub Issues at each level with the appropriate `type:` label, all linked upward to their parent.
-9. Do **not** open PRs until each Task is labeled `ready-for-scaffold`.
+The agent must never interpret silence as approval.
 
-### 5.4 Existing specs in this repo
+## 8. Bug workflow
 
-| Spec | Covers | Status |
-|---|---|---|
-| `docs/plans/concept.md` | Full game design: 8 stages, bosses, abilities, scoring, visual direction | Authoritative GDD |
-| `docs/plans/tech-stack.md` | Engineering decisions: Phaser 4, TypeScript, Vite, Tiled, state-machine architecture | Authoritative |
-| `docs/specs/` | Empty — future specs go here | Not started |
+1. A human opens a `type:bug` issue describing reproduction steps, expected
+   behavior, actual behavior, affected scene/system, and available errors.
+2. The agent checks for duplicates, assigns area and severity, reads relevant
+   code, and posts its evidence.
+3. The agent proposes a bounded fix plan and verification checklist.
+4. The human adds `approve:implement`.
+5. The agent creates or reuses a deterministic branch and implements the fix.
+6. The agent runs all required checks and opens or updates one draft PR.
+7. Runtime behavior receives a human playtest checklist.
+8. The human reviews and merges.
 
-## 6. Bug reporting process
+Critical bugs take priority over feature work, but they still require explicit
+implementation approval unless emergency policy is separately documented.
 
-Bugs are reported by you and managed through GitHub Issues by the agent.
+## 9. Agent tools
 
-### 6.1 How you report a bug
+### 9.1 Read-only tools
 
-1. Open a GitHub Issue with `type:bug`, linked to the parent Feature (or Epic) it affects.
-2. Include: what you did, what you expected, what happened, which scene/boss/stage, any console errors.
-3. The agent triages it automatically (see §9.3).
+| Tool | Purpose |
+|---|---|
+| `read_repo_file(path, ref)` | Read a repository file at an explicit revision |
+| `list_repo_files(path, ref)` | Discover files within an allowed path |
+| `search_issues(query)` | Search issues and existing proposal markers |
+| `get_issue(number)` | Read an issue and comments |
+| `get_pull_request(number)` | Read PR metadata and linked issue |
+| `get_pull_request_diff(number)` | Inspect changed files and patches |
+| `get_check_runs(ref)` | Read CI status and logs/URLs |
+| `get_review_comments(number)` | Read actionable review feedback |
 
-### 6.2 How the agent handles bugs
+### 9.2 Mutation tools
 
-When a `type:bug` issue is opened:
+| Tool | Required authorization |
+|---|---|
+| `comment_on_issue(number, body, marker)` | Allowed for managed issues; dry-run aware |
+| `replace_status_label(number, label)` | Allowed for managed issues; dry-run aware |
+| `add_taxonomy_labels(number, labels)` | Allowed for managed issues; dry-run aware |
+| `consume_approval_label(number, label, proposal_id)` | Matching unconsumed approval |
+| `create_issue(...)` | `approve:create-issues` |
+| `update_issue(...)` | Matching approval when scope/state changes materially |
+| `create_branch(name, base_sha)` | `approve:implement` |
+| `apply_patch(branch, patch, expected_sha)` | `approve:implement` |
+| `commit_and_push(branch, message, expected_sha)` | `approve:implement` |
+| `create_or_update_draft_pr(...)` | `approve:implement` |
+| `close_issue(number)` | `approve:close`, or merged PR plus explicit policy |
 
-1. **Triage immediately**: assign `area:` and `discipline:` labels, estimate severity, check for duplicates.
-2. **Reproduce**: if the bug is in code the agent can inspect, read the relevant source files and attempt to identify the root cause. Post findings as a comment.
-3. **Propose a fix plan**: a short task checklist in a comment. Ask you to confirm before opening a PR.
-4. **Implement**: once confirmed, the agent opens one draft PR with the fix.
-5. **Verify**: CI must pass (`typecheck` + `build`). If the bug involves runtime behavior (collision, health, scene transitions), the agent generates a playtest checklist for you to manually verify.
+All path-taking tools reject absolute paths, traversal, symlink escape, and
+modification outside an allowlist. Changes to these paths require a separate
+human-authored PR and are denied to the agent by default:
 
-### 6.3 Bug severity labels
+- `.github/workflows/`
+- `.github/CODEOWNERS`
+- `agents/sdlc_agent/instructions.py`
+- Agent authentication or permission configuration
+- Dependency manifests and lockfiles, unless the Task explicitly authorizes them
 
-| Label | Meaning | Agent response |
-|---|---|---|
-| `severity:critical` | Crashes, build breaks, unplayable | Fix immediately, before any feature work |
-| `severity:major` | Wrong behavior, blocks gameplay | Fix in current milestone |
-| `severity:minor` | Cosmetic, edge case, polish | Fix when convenient |
+### 9.3 Local validation tools
 
-The agent assigns severity based on its analysis; you can override it.
+- `run_npm_ci()`
+- `run_typecheck()`
+- `run_build()`
+- `run_lint()` once defined
+- `run_tests()` once defined
 
-## 7. Devcontainer changes needed
+Command tools use a fixed command allowlist; the model cannot supply arbitrary
+shell text.
 
-The current `Dockerfile` (Node.js 22, Bookworm) has no Python. Add to the `apt-get install` line:
+## 10. Idempotency and concurrency
 
-```dockerfile
-python3 \
-python3-pip \
-python3-venv \
+Every generated object contains a machine-readable marker:
+
+```text
+<!-- sdlc-agent:{operation}:{subject}:{proposal-id} -->
 ```
 
-New `agents/requirements.txt`:
+Before any mutation, the tool searches for its marker and returns the existing
+resource when found. Branch names are deterministic:
 
-```
-agent-framework
-agent-framework-tools
-openai
-PyGithub
-rich
-python-dotenv
+```text
+agent/task-{issue-number}-{slug}
 ```
 
-## 8. The SDLC harness agent
+The workflow uses a concurrency group keyed by issue or PR number:
 
-### 8.1 Entry point
+```yaml
+concurrency:
+  group: sdlc-agent-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
+```
 
-`agents/sdlc_agent/run.py` — invoked by `.github/workflows/sdlc-agent.yml`:
+Tools use expected SHA/version checks so parallel changes fail safely instead of
+overwriting newer work.
+
+## 11. Dry-run behavior
+
+`DRY_RUN=true` is enforced inside every mutation tool, not only in the prompt.
+In dry-run mode, mutation tools return the proposed request without calling
+GitHub or writing files. The final report lists:
+
+- Proposed mutations.
+- Required approval labels.
+- Files that would change.
+- Validation commands that would run.
+- Estimated model/tool-call budget.
+
+## 12. Harness configuration
+
+The DeepSeek endpoint implements OpenAI-compatible Chat Completions. Therefore
+the agent uses `OpenAIChatCompletionClient`, not the Responses-oriented
+`OpenAIChatClient`.
 
 ```python
-from agent_framework import create_harness_agent, todos_remaining
-from agent_framework.openai import OpenAIChatClient
-from agent_framework.file_memory import FileMemoryStore
+import os
 
-from .tools import (
-    create_issue, update_issue, comment_on_issue, add_labels,
-    search_issues, get_issue, create_pull_request, create_branch,
-    read_repo_file, run_typecheck, run_build,
+from agent_framework import create_harness_agent, todos_remaining
+from agent_framework.openai import OpenAIChatCompletionClient
+
+client = OpenAIChatCompletionClient(
+    model=os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-pro"),
+    base_url="https://api.deepseek.com",
+    api_key=os.environ["DEEPSEEK_API_KEY"],
 )
 
 agent = create_harness_agent(
-    client=OpenAIChatClient(
-        model=os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-pro"),
-        base_url="https://api.deepseek.com",
-        api_key=os.environ["DEEPSEEK_API_KEY"],
-    ),
+    client=client,
     name="sdlc-agent",
-    agent_instructions=SDL_AGENT_INSTRUCTIONS,
-    tools=[
-        create_issue, update_issue, comment_on_issue, add_labels,
-        search_issues, get_issue, create_branch, create_pull_request,
-        read_repo_file, run_typecheck, run_build,
-    ],
-    memory_store=FileMemoryStore("./.github/agent-memory"),
+    agent_instructions=SDLC_AGENT_INSTRUCTIONS,
+    tools=TOOLS,
     max_context_window_tokens=128_000,
     max_output_tokens=16_384,
     loop_should_continue=todos_remaining(),
-    loop_max_iterations=15,
+    loop_max_iterations=10,
 )
 ```
 
-### 8.2 System instructions
+Before implementation, a compatibility test must verify:
 
-The full `SDL_AGENT_INSTRUCTIONS` string lives in `agents/sdlc_agent/instructions.py`. Its structure:
+- Harness imports against the pinned dependency versions.
+- Chat Completions tool calling through DeepSeek.
+- Thinking/reasoning parameters supported by the selected client.
+- Todo looping and maximum-iteration behavior.
+- Approval-request behavior in local interactive mode.
+- Compaction and telemetry output.
 
-- **Identity**: You are the SDLC agent for Shadow Circuit, a Phaser 4 TypeScript martial-arts platformer. You fill every development role: designer, programmer, artist (specs), composer (specs), QA, and producer. The human is the approver — you propose, they decide.
-- **Game knowledge**: 8 stages with unique bosses and ability unlocks from `src/levels/StageCatalog.ts`. Reference `docs/plans/concept.md` and `docs/plans/tech-stack.md` for design and engineering decisions. Read `docs/specs/` for per-feature specifications.
-- **Spec-driven workflow**: Specs are the single source of truth. When a `type:spec` issue is opened, read the spec, ask clarifying questions, then generate a plan. Plans produce task issues. Task issues produce one PR each. Never implement without a spec or an approved plan.
-- **Questioning rule**: Whenever a spec, issue, or bug report is ambiguous or missing information needed to proceed, **ask the human** in a comment. Do not guess design decisions, mechanics, tuning values, or acceptance criteria.
-- **SDLC phases**: Design → Backlog → Planning → Implementation → Build → QA/Playtest → Release → Postmortem.
-- **Issue taxonomy**: `type:feature|bug|spec|chore|research`, `area:player|enemy|boss|stage|systems|ui|build|ci`, `discipline:code|art|audio|design|qa`, `severity:critical|major|minor` (bugs only).
-- **Milestones**: `v0.1 Vertical Slice`, `v0.2 Content Pipeline`, `v0.3 Districts 2-4`, `v0.4 Districts 5-7`, `v1.0 Shadow Citadel & Release`.
-- **Status lifecycle**: `Proposed → Triaged → Ready → In Progress → In Review → Playtest → Done`. `Blocked` is a label overlay.
-- **Definition of Done**: `npm run typecheck` passes, `npm run build` passes, lint passes (once added), acceptance criteria from the spec checked, human has approved and merged the PR.
-- **PR rules**: One PR per task issue. Every PR is a draft until CI passes. Only the human merges. Always reference the parent spec and task issue in the PR body.
-- **Autonomy boundary**: Never merge PRs. Never push to `main`. Never close issues the human opened without explicit approval. Always question ambiguity. Always mark agent-generated content with `agent:generated` label.
-- **Trigger awareness**: Read the `TRIGGER_EVENT` environment variable to know why you were invoked (`issue_opened`, `nightly`, `pr_opened`, `manual`) and adapt your first action accordingly.
+Looping has a strict iteration cap. A single run may not create more than the
+configured number of issues, comments, commits, or model calls.
 
-### 8.3 Tools
+## 13. Durable state and memory
 
-All tools are Python async functions registered with Agent Framework's tool decorator.
+The durable record consists of:
 
-| Tool | What it does | Approval |
-|---|---|---|
-| `read_repo_file(path)` | Reads a file from the workspace (relative path) | Auto-approved (read-only) |
-| `search_issues(query, labels, state)` | Searches GitHub Issues | Auto-approved |
-| `get_issue(number)` | Gets a single issue with body + comments | Auto-approved |
-| `create_issue(title, body, labels, milestone)` | Creates a new issue | Requires approval |
-| `update_issue(number, body, state, milestone)` | Updates an issue's body/state/milestone | Requires approval |
-| `comment_on_issue(number, body)` | Adds a comment (signed `🤖 sdlc-agent`) | Auto-approved |
-| `add_labels(number, labels)` | Adds labels to an issue | Auto-approved |
-| `create_branch(name)` | Creates a new branch from `main` | Requires approval |
-| `create_pull_request(base, head, title, body, draft)` | Opens a draft PR | Requires approval |
-| `run_typecheck()` | Runs `npm run typecheck`, returns output | Auto-approved |
-| `run_build()` | Runs `npm run build`, returns output | Auto-approved |
+- Approved specifications.
+- Issue bodies, comments, labels, and milestones.
+- Proposal IDs and consumed approval records.
+- Git commits and pull requests.
+- A reviewed `docs/decisions/` log for lasting design decisions.
 
-Auto-approved tools use the harness's heuristic approval — they still log but don't block. Write operations (`create_issue`, `update_issue`, `create_branch`, `create_pull_request`) always require human approval through the harness's approval middleware.
+Harness file memory is optional scratch state. It is not committed automatically
+and may be discarded between Actions runs. If cross-run conversational memory
+is later required, it must use a purpose-built store with retention, access
+control, and backup policy.
 
-### 8.4 How the harness maps to SDLC tasks
+## 14. GitHub Actions
 
-| SDLC task | Harness feature used |
-|---|---|
-| "Plan the work for Iron Crane phase 2" | `TodoProvider` creates a todo list; `AgentModeProvider` switches to plan mode |
-| "Work through those todos autonomously" | `Looping` with `todos_remaining()` re-invokes until todos are complete |
-| "Remember what we decided about attack hitboxes" | `FileMemoryProvider` writes durable notes to `.github/agent-memory/` |
-| "Don't overflow context during a long planning session" | `Compaction` with 128K token budget |
-| "Ask me before opening any issues" | `ToolApproval` blocks writes until approved |
-| "How many tokens did that run cost?" | `OpenTelemetry` traces every call |
-
-## 9. GitHub Actions workflows
-
-### 9.1 `sdlc-agent.yml` — the one workflow
+### 14.1 Agent workflow
 
 ```yaml
 name: SDLC Agent
+
 on:
   issues:
     types: [opened, edited, labeled]
+  issue_comment:
+    types: [created, edited]
   pull_request:
     types: [opened, synchronize]
   schedule:
-    - cron: "0 6 * * 1-5"  # weekday mornings
+    - cron: "0 14 * * 1-5" # 08:00 Edmonton during MDT; 07:00 during MST
   workflow_dispatch:
     inputs:
       prompt:
-        description: "What should the agent do?"
+        description: What should the agent analyze?
         required: true
+        type: string
       dry_run:
-        description: "Preview only, don't write to GitHub"
+        description: Prevent all mutations
+        required: true
+        default: true
         type: boolean
-        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: >-
+    sdlc-agent-${{
+      github.event.issue.number ||
+      github.event.pull_request.number ||
+      github.run_id
+    }}
+  cancel-in-progress: false
 
 jobs:
   run:
+    if: >-
+      ${{
+        vars.SDLC_AGENT_ENABLED == 'true' &&
+        (
+          github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository
+        )
+      }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      checks: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r agents/requirements.txt
-      - run: python agents/sdlc_agent/run.py
+          cache: pip
+          cache-dependency-path: agents/requirements.txt
+      - run: python -m pip install --requirement agents/requirements.txt
+      - run: python -m sdlc_agent.run
         env:
+          PYTHONPATH: agents
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL || 'deepseek-chat' }}
+          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL || 'deepseek-v4-pro' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TRIGGER_EVENT: ${{ github.event_name }}
           ISSUE_NUMBER: ${{ github.event.issue.number || '' }}
           PR_NUMBER: ${{ github.event.pull_request.number || '' }}
-          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          MANUAL_PROMPT: ${{ inputs.prompt || '' }}
+          DRY_RUN: >-
+            ${{
+              github.event_name == 'workflow_dispatch' &&
+              inputs.dry_run ||
+              false
+            }}
+          SDLC_AGENT_ENABLED: ${{ vars.SDLC_AGENT_ENABLED || 'false' }}
 ```
 
-### 9.2 `ci.yml` — prerequisite gates
+The implementation must filter `issue_comment` events to managed issues and
+ignore comments carrying the agent's own marker.
+
+GitHub generally suppresses new workflow runs caused by `GITHUB_TOKEN`. The
+implementation must not depend on an agent-created issue, label, commit, or PR
+automatically triggering the next phase. Use one of:
+
+1. An explicit `repository_dispatch` after a completed mutation.
+2. A deliberately scoped GitHub App installation token.
+3. A bounded continuation within the same run.
+
+The chosen mechanism must be documented and tested before live mutation is
+enabled. A fine-grained PAT is not the default.
+
+### 14.2 CI workflow
 
 ```yaml
 name: CI
-on: [push, pull_request]
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
 ```
 
-### 9.3 Trigger-to-behavior mapping
+Add lint and tests to CI as soon as their scripts exist.
 
-| Trigger | Agent's first action |
+## 15. Trigger behavior
+
+| Trigger | Behavior |
 |---|---|
-| `issues.opened` with `type:spec` | Spec review: read the spec, check consistency, ask clarifying questions. Once approved, generate a Plan broken into Epics → Features → Tasks. |
-| `issues.opened` with `type:bug` | Bug triage: verify linked Feature/Epic, assign `severity:`, attempt root-cause analysis, propose fix plan, ask for confirmation. |
-| `issues.opened` with `type:epic` | Epic triage: verify parent Spec, assign `area:` label, prepare to break into Features. |
-| `issues.opened` with `type:feature` | Feature triage: verify parent Epic/Spec, assign `area:` and `discipline:` labels, prepare to break into Tasks. |
-| `issues.opened` with `type:task` | Task triage: verify parent Feature, confirm file list and acceptance criteria. This is the level where PRs happen. |
-| `issues.opened` (untyped) | Triage: assign `type:`, `area:`, `discipline:` labels, check for duplicates, ask the human if unclassifiable. |
-| `issues.edited` | Re-triage if body changed substantially. |
-| `issues.labeled` with `ready-for-planning` | Plan mode: read the issue + linked parents + design docs, create a todo list, post breakdown as a comment at the appropriate level. |
-| `issues.labeled` with `ready-for-scaffold` (on a Task) | Create a branch, open one draft PR with file stubs matching repo conventions, link to the Task and all parent issues. |
-| `pull_request.opened` | PR readiness: review diff, check CI status, comment a structured Definition-of-Done checklist. Verify the PR references a single Task. |
-| `nightly schedule` | Backlog curation: check for stale issues, un-tracked stages, duplicate detection, spec-to-task coverage gaps. |
-| `workflow_dispatch` | Whatever the `prompt` input says — full interactive agent session. |
+| New `type:spec` issue | Review spec and post questions or a plan proposal |
+| New `type:bug` issue | Triage, investigate, and propose a fix |
+| New untyped issue | Propose taxonomy; apply safe labels when policy permits |
+| Issue edited | Re-evaluate only when the content hash changed |
+| Human issue comment | Re-evaluate managed questions and proposals |
+| `approve:plan` | Record the referenced plan as approved |
+| `approve:create-issues` | Create the referenced issue set idempotently |
+| `approve:implement` | Implement the referenced Task on a deterministic branch |
+| PR opened | Verify single-Task scope and post a Definition-of-Done checklist |
+| PR synchronized | Re-read the diff and current checks; update the existing review comment |
+| Schedule | Produce one backlog audit; do not mutate without approval |
+| Manual dispatch | Perform requested analysis; dry-run defaults to true |
 
-## 10. Repository layout after implementation
+## 16. Definition of Done
 
-```text
-.github/
-├── workflows/
-│   ├── sdlc-agent.yml          # the one harness agent workflow
-│   └── ci.yml                  # typecheck + build gate
-├── agent-memory/               # FileMemoryProvider writes here
-│   ├── sessions/               # per-session notes (auto-created)
-│   └── notes.md                # durable cross-session memory
-├── ISSUE_TEMPLATE/
-│   ├── spec.yml                # for type:spec issues
-│   ├── epic.yml                # for type:epic issues
-│   ├── feature.yml             # for type:feature issues
-│   ├── task.yml                # for type:task issues (one PR each)
-│   └── bug.yml                 # for type:bug issues (linked to feature/epic)
-└── PULL_REQUEST_TEMPLATE.md
+A Task is Done only when:
 
-docs/
-├── plans/
-│   ├── concept.md              # game design document (authoritative)
-│   ├── tech-stack.md           # engineering decisions (authoritative)
-│   └── agentic-sdlc-workflow.md # this plan
-└── specs/                      # per-feature specs (the single source of truth)
-    └── .gitkeep
+- The change matches one approved Task and its parent specification.
+- Acceptance criteria are mapped to evidence.
+- `npm ci`, typecheck, and build pass.
+- Relevant tests pass once tests exist.
+- No unexpected dependency, generated-file, workflow, or instruction changes
+  are present.
+- Runtime behavior has a completed manual playtest checklist when automation is
+  insufficient.
+- CI passes on the final commit.
+- The human approves and merges the PR.
+- Durable issue/spec status is updated without relying on agent memory.
 
-agents/
-├── requirements.txt            # agent-framework, openai, PyGithub, rich, python-dotenv
-├── sdlc_agent/
-│   ├── __init__.py
-│   ├── run.py                  # creates harness agent + invokes it
-│   ├── instructions.py         # SDL_AGENT_INSTRUCTIONS (full system prompt)
-│   ├── tools.py                # GitHub + build tool implementations
-│   └── config.py               # labels, milestones, repo metadata
-└── tests/
-    └── test_tools.py           # unit tests for tool functions
-```
+## 17. Security and governance
 
-## 11. How the harness simplifies the earlier plan
+- Treat issue bodies, comments, PR text, source comments, and linked content as
+  untrusted input.
+- Never place secrets, full prompts, hidden reasoning, or credentials in logs,
+  memory files, comments, or telemetry.
+- Validate all tool arguments independently of model output.
+- Use minimal GitHub permissions and an environment approval gate before
+  enabling repository writes.
+- Deny self-modification of workflows, instructions, permissions, and approval
+  policy.
+- Record trigger actor, source SHA, model, dependency version, proposal ID,
+  approval actor, requested mutation, result, and token usage.
+- Provide a repository variable such as `SDLC_AGENT_ENABLED=false` as a kill
+  switch checked before any model or mutation call.
 
-| Earlier plan (7 agents) | Harness plan (1 agent) |
-|---|---|
-| Each agent had its own tool-calling loop | Harness `FunctionInvocationMiddleware` |
-| Each agent needed separate history storage | Harness `PerServiceCallHistoryPersistence` |
-| Custom planning logic per agent | Harness `TodoProvider` + `AgentModeProvider` |
-| Custom memory file per agent | Harness `FileMemoryProvider` (one store) |
-| Custom approval per agent | Harness `ToolApprovalMiddleware` |
-| No compaction — could overflow | Harness `CompactionMiddleware` with token budget |
-| No telemetry | Harness OpenTelemetry |
+## 18. Rollout
 
-## 12. Rollout plan
+1. **Compatibility spike:** pinned dependencies, DeepSeek tool calling, harness
+   loop, and import smoke tests.
+2. **CI baseline:** typecheck and build.
+3. **Templates and taxonomy:** specification, task, and bug templates plus
+   labels.
+4. **Read-only tools:** repository, issue, PR diff, review, and checks.
+5. **Dry-run agent:** manual dispatch only.
+6. **Live analysis:** comments and safe taxonomy labels with idempotency.
+7. **Asynchronous approval:** proposal IDs, approval labels, and consumption
+   records.
+8. **Issue creation:** approved, bounded, and idempotent.
+9. **Restricted implementation:** patch, validate, commit, and draft PR for one
+   known-defect Task.
+10. **PR synchronization:** diff and CI-aware review updates.
+11. **Scheduled audits:** report-only backlog and documentation-drift checks.
+12. **Release assistance:** approved release notes after the earlier phases are
+    proven.
 
-Phased so each stage is independently reviewable and toggleable.
+The recommended first implementation specification groups the known defects
+into three Tasks: damage/hit detection, scene-state transitions, and input/UI
+consistency.
 
-1. **Devcontainer**: Add Python 3.12 + `agents/requirements.txt` to `Dockerfile`. *(Blocks everything else.)*
-2. **CI workflow**: `.github/workflows/ci.yml` — typecheck + build gate. *(Prerequisite for "Done.")*
-3. **Templates + labels**: `.github/ISSUE_TEMPLATE/` (spec, feature, bug), `.github/PULL_REQUEST_TEMPLATE.md`, labels (including `severity:*`), milestones.
-4. **Spec directory**: Create `docs/specs/` with a `README.md` explaining the spec format and lifecycle.
-5. **Tools first (no agent yet)**: Implement `agents/sdlc_agent/tools.py` — GitHub API + build tools. Unit test them. Verify with a `workflow_dispatch` that lists open issues.
-6. **Harness agent (dry-run)**: Wire `create_harness_agent()` with instructions + tools. Run with `dry_run=true` to verify the agent produces sensible plans/comments without side effects.
-7. **Live triage**: Enable `issues.opened` trigger. Agent labels, asks questions, and routes spec/bug/feature issues.
-8. **Live planning**: Enable `ready-for-planning` label trigger. Agent posts task breakdowns from specs.
-9. **Nightly curation**: Enable schedule trigger. Agent audits the backlog and spec-to-issue coverage.
-10. **PR readiness**: Enable `pull_request.opened` trigger. Agent comments review checklist.
-11. **Scaffolder + one-PR-per-task**: Enable `ready-for-scaffold` trigger. Agent creates branch + draft PR per task.
-12. **Release notes**: Add tag-push trigger. Agent drafts release notes.
+## 19. Open decisions
 
-Each phase after step 6 is independently toggleable by commenting out its trigger in the workflow YAML.
+1. Select `repository_dispatch`, a GitHub App, or bounded same-run continuation
+   for intentional workflow chaining.
+2. Decide whether local interactive harness sessions are in scope in addition
+   to GitHub Actions.
+3. Set per-run limits for tokens, model calls, comments, issues, commits, and
+   estimated cost.
+4. Choose the initial test framework and browser/runtime smoke-test strategy.
+5. Confirm the local time desired for scheduled audits; GitHub cron is UTC and
+   does not adjust for Edmonton daylight-saving changes.
 
-## 13. Secrets needed
+## 20. References
 
-| Secret | Where | Purpose |
-|---|---|---|
-| `DEEPSEEK_API_KEY` | GitHub Actions secrets + devcontainer `.env` | Same key used for Copilot Chat extension and harness agent |
-| `GITHUB_TOKEN` | Automatic in GitHub Actions | GitHub API (issues, PRs, comments, branches) |
-
-## 14. Grounding in this repo
-
-- [`docs/plans/concept.md`](concept.md) is the de facto Game Design Document: 8 stage/boss pairs, ability-unlock progression, scoring, replay modes, and an explicit recommendation to build one polished vertical slice first.
-- [`docs/plans/tech-stack.md`](tech-stack.md) fixes the engineering stack (Phaser 4, TypeScript, Vite, Arcade Physics, Tiled) and the boss state-machine architecture.
-- [`src/levels/StageCatalog.ts`](../../src/levels/StageCatalog.ts) enumerates all 8 stages/bosses/unlocks as data — the natural seed for auto-generated issues.
-- Currently **no** `.github` directory, no CI, no lint config, no tests. The workflow's first automated task is to stand these up, since every later "Done" gate depends on them.
-
-## 15. Open questions for you
-
-1. **DeepSeek model per invocation**: Use `deepseek-v4-flash` (faster/cheaper, $0.14/$0.28 per 1M tokens) for triage and quick tasks, or `deepseek-v4-pro` (deeper reasoning, $0.435/$0.87 per 1M tokens, thinking mode default-on) for planning and implementation? The `DEEPSEEK_MODEL` env var makes this per-invocation switchable.
-2. **Nightly schedule**: Weekday mornings (`0 6 * * 1-5`) as proposed, or a different cadence?
-3. **Agent memory in repo**: Commit `.github/agent-memory/` (version-controlled durable notes) or add it to `.gitignore` (ephemeral)?
-4. **GitHub auth**: Fine-grained PAT or a GitHub App? A PAT is faster to set up for a solo repo; a GitHub App scales better if collaborators join later.
-5. **First spec**: Which spec should the agent process first after setup? The vertical-slice improvements from the earlier code review (contact damage, boss attacks, scene state), or a new stage/boss spec?
+- [Microsoft Agent Framework harness release](https://devblogs.microsoft.com/agent-framework/the-microsoft-agent-framework-harness-is-now-released/)
+- [Microsoft Agent Framework harness documentation](https://learn.microsoft.com/en-us/agent-framework/agents/harness)
+- [DeepSeek API quick start](https://api-docs.deepseek.com/)
+- [GitHub `GITHUB_TOKEN` behavior](https://docs.github.com/en/actions/concepts/security/github_token)
+- [GitHub Actions token permissions](https://docs.github.com/en/actions/tutorials/authenticate-with-github_token)

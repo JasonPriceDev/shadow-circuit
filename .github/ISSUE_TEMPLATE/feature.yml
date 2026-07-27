@@ -1,31 +1,40 @@
 name: Feature
-description: A medium work unit within an Epic. Broken into Tasks by the agent.
+description: Define an independently valuable outcome within a Spec or Epic.
 title: "[Feature]: "
-labels: ["type:feature", "agent:generated"]
+labels:
+  - "type:feature"
+  - "status:proposed"
 body:
-  - type: input
-    id: parent-epic
+  - type: markdown
     attributes:
-      label: Parent Epic
-      description: Number of the parent `type:epic` issue this feature belongs to.
+      value: |
+        Features are optional. Use one when an approved Spec or Epic needs
+        multiple independently reviewable Tasks. Agent-created Features receive
+        `agent:generated` through the mutation tool.
+
+  - type: input
+    id: parent
+    attributes:
+      label: Parent Spec or Epic
+      description: Number of the direct parent `type:spec` or `type:epic` issue.
       placeholder: "#123"
     validations:
       required: true
 
   - type: input
-    id: parent-spec
+    id: root-spec
     attributes:
-      label: Parent Spec (if no Epic)
-      description: Number of the parent `type:spec` issue (only if this feature is not under an Epic).
+      label: Root Spec
+      description: Number of the top-level `type:spec` issue for traceability.
       placeholder: "#100"
     validations:
-      required: false
+      required: true
 
   - type: textarea
-    id: description
+    id: outcome
     attributes:
-      label: Description
-      description: What this feature covers. The agent will break this into Tasks.
+      label: Feature outcome
+      description: Describe the independently valuable behavior or capability.
     validations:
       required: true
 
@@ -33,8 +42,9 @@ body:
     id: acceptance
     attributes:
       label: Acceptance criteria
-      description: How to verify this feature is done (all its Tasks complete).
+      description: List observable outcomes completed by this Feature's Tasks.
       value: |
+        - [ ]
         - [ ]
     validations:
       required: true
@@ -42,23 +52,50 @@ body:
   - type: textarea
     id: files
     attributes:
-      label: Files likely involved
-      description: Expected file paths (the agent will determine exact paths during planning).
+      label: Likely files or systems
+      description: Add paths or symbols when known; the plan determines the exact change set.
       placeholder: |
-        - `src/scenes/StageScene.ts` (modify)
-        - `src/components/Invulnerability.ts` (create)
+        - `src/scenes/StageScene.ts`
+        - `Player` damage handling
     validations:
       required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Primary area
+      description: The agent maps this value to the corresponding `area:*` label.
+      options:
+        - "player"
+        - "enemy"
+        - "boss"
+        - "stage"
+        - "systems"
+        - "ui"
+        - "build"
+        - "ci"
+        - "agent"
+    validations:
+      required: true
 
   - type: dropdown
     id: discipline
     attributes:
       label: Primary discipline
+      description: The agent maps this value to the corresponding `discipline:*` label.
       options:
-        - code
-        - art
-        - audio
-        - design
-        - qa
+        - "code"
+        - "art"
+        - "audio"
+        - "design"
+        - "qa"
     validations:
       required: true
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This outcome requires multiple independently reviewable Tasks.
+          required: true

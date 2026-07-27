@@ -1,21 +1,27 @@
 name: Spec
-description: Propose a top-level specification. Once approved, the agent generates a plan breaking it into Epics, Features, and Tasks.
+description: Propose a coherent product or engineering outcome for review and planning.
 title: "[Spec]: "
-labels: ["type:spec", "agent:generated"]
+labels:
+  - "type:spec"
+  - "status:proposed"
 body:
   - type: markdown
     attributes:
       value: |
-        A spec is the single source of truth for a body of work. Once you approve
-        this spec, the SDLC agent will generate a plan and break it down into
-        **Epics → Features → Tasks**. See `docs/specs/README.md` for the lifecycle.
+        A Spec defines outcomes and acceptance criteria. The normal hierarchy is
+        **Spec → Task → Pull Request**. Use **Epic → Feature** layers only when
+        the work has multiple independently valuable delivery streams.
+
+        The agent reviews this proposal and posts questions or a plan with a
+        proposal ID. Human approval is recorded with the workflow's single-use
+        approval labels; submitting this form does not authorize implementation.
 
   - type: input
     id: spec-file
     attributes:
-      label: Spec file
-      description: Path to the spec Markdown file in `docs/specs/` (optional if small).
-      placeholder: docs/specs/lantern-rooftops.md
+      label: Specification file
+      description: Path to the Markdown specification in `docs/specs/`, when one exists.
+      placeholder: docs/specs/lantern-rooftops-combat.md
     validations:
       required: false
 
@@ -23,7 +29,7 @@ body:
     id: summary
     attributes:
       label: Summary
-      description: One paragraph describing what this spec covers and why.
+      description: Explain the outcome, the user or player benefit, and why it matters.
     validations:
       required: true
 
@@ -31,7 +37,7 @@ body:
     id: acceptance
     attributes:
       label: Acceptance criteria
-      description: Checklist of verifiable outcomes at the spec level.
+      description: List observable, independently verifiable outcomes.
       value: |
         - [ ]
         - [ ]
@@ -42,8 +48,8 @@ body:
   - type: textarea
     id: design
     attributes:
-      label: Design notes
-      description: Mechanics, patterns, layouts, tuning values — whatever the agent needs to plan implementation.
+      label: Design notes and constraints
+      description: Include approved mechanics, patterns, layouts, tuning, and constraints.
     validations:
       required: false
 
@@ -51,7 +57,7 @@ body:
     id: dependencies
     attributes:
       label: Dependencies
-      description: What must exist before this can be built.
+      description: Link required issues, specifications, assets, or external decisions.
     validations:
       required: false
 
@@ -59,17 +65,39 @@ body:
     id: risks
     attributes:
       label: Risks and open questions
-      description: What's uncertain, what could go wrong.
+      description: Identify uncertainty, tradeoffs, and decisions that require human input.
+    validations:
+      required: false
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification approach
+      description: Describe expected automated checks and manual playtest evidence.
+      placeholder: |
+        - `npm run typecheck`
+        - `npm run build`
+        - Manual playtest: verify the damage cooldown at 60 Hz and 120 Hz
     validations:
       required: false
 
   - type: dropdown
-    id: size
+    id: breakdown
     attributes:
-      label: Does this need to be broken into Epics?
-      description: Small specs can skip the Epic layer and go straight to Features.
+      label: Expected breakdown
+      description: This is an estimate; the reviewed plan determines the final hierarchy.
       options:
-        - "Yes — break into Epics"
-        - "No — go straight to Features"
+        - "Direct Tasks — normal choice for small or focused work"
+        - "Features and Tasks — several independently reviewable outcomes"
+        - "Epics, Features, and Tasks — multiple large delivery streams"
+        - "Research first — scope or feasibility is not yet clear"
     validations:
       required: true
+
+  - type: checkboxes
+    id: authority
+    attributes:
+      label: Authority
+      options:
+        - label: I understand that this is a proposal and does not authorize implementation.
+          required: true

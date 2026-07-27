@@ -3,35 +3,85 @@ name: SDLC Agent
 on:
   issues:
     types: [opened, edited, labeled]
+  issue_comment:
+    types: [created, edited]
   pull_request:
     types: [opened, synchronize]
   schedule:
-    - cron: "0 6 * * 1-5"
+    # GitHub cron uses UTC. This runs at 08:00 MDT / 07:00 MST in Edmonton.
+    - cron: "0 14 * * 1-5"
   workflow_dispatch:
     inputs:
       prompt:
-        description: "What should the agent do?"
+        description: "What should the agent analyze?"
         required: true
+        type: string
       dry_run:
-        description: "Preview only, don't write to GitHub"
+        description: "Prevent all GitHub and repository mutations"
+        required: true
         type: boolean
-        default: false
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: >-
+    sdlc-agent-${{
+      github.event.issue.number ||
+      github.event.pull_request.number ||
+      github.run_id
+    }}
+  cancel-in-progress: false
 
 jobs:
   run:
+    if: >-
+      ${{
+        vars.SDLC_AGENT_ENABLED == 'true' &&
+        (
+          github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository
+        )
+      }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      checks: read
+      contents: write
+      issues: write
+      pull-requests: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r agents/requirements.txt
-      - run: PYTHONPATH=agents python -m sdlc_agent.run
+          cache: pip
+          cache-dependency-path: agents/requirements.txt
+
+      - name: Install agent dependencies
+        run: python -m pip install --requirement agents/requirements.txt
+
+      - name: Run SDLC agent
+        run: python -m sdlc_agent.run
         env:
+          PYTHONPATH: agents
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL || 'deepseek-v4-pro' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TRIGGER_EVENT: ${{ github.event_name }}
           ISSUE_NUMBER: ${{ github.event.issue.number || '' }}
           PR_NUMBER: ${{ github.event.pull_request.number || '' }}
-          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          MANUAL_PROMPT: ${{ inputs.prompt || '' }}
+          DRY_RUN: >-
+            ${{
+              github.event_name == 'workflow_dispatch' &&
+              inputs.dry_run ||
+              false
+            }}
+          SDLC_AGENT_ENABLED: ${{ vars.SDLC_AGENT_ENABLED || 'false' }}

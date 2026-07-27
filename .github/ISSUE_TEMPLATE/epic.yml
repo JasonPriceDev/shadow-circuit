@@ -1,22 +1,31 @@
 name: Epic
-description: A large body of work within a Spec, broken into Features by the agent.
+description: Define a large delivery stream within an approved Spec.
 title: "[Epic]: "
-labels: ["type:epic", "agent:generated"]
+labels:
+  - "type:epic"
+  - "status:proposed"
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Use an Epic only when an approved Spec contains multiple independently
+        valuable Features. Agent-created Epics receive the `agent:generated`
+        label through the mutation tool, not from this human-facing template.
+
   - type: input
     id: parent-spec
     attributes:
       label: Parent Spec
-      description: Number of the parent `type:spec` issue this Epic belongs to.
+      description: Number of the approved `type:spec` issue.
       placeholder: "#100"
     validations:
       required: true
 
   - type: textarea
-    id: description
+    id: outcome
     attributes:
-      label: Description
-      description: What this Epic covers. The agent will break this into Features.
+      label: Epic outcome
+      description: Describe the coherent delivery stream and its value.
     validations:
       required: true
 
@@ -24,24 +33,43 @@ body:
     id: acceptance
     attributes:
       label: Acceptance criteria
-      description: How to verify this Epic is done (all its Features complete).
+      description: Define how completion of this Epic can be verified.
       value: |
+        - [ ]
         - [ ]
     validations:
       required: true
 
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and sequencing
+      description: Link prerequisite work and describe ordering constraints.
+    validations:
+      required: false
+
   - type: dropdown
     id: area
     attributes:
-      label: Area
+      label: Primary area
+      description: The agent maps this value to the corresponding `area:*` label.
       options:
-        - player
-        - enemy
-        - boss
-        - stage
-        - systems
-        - ui
-        - build
-        - ci
+        - "player"
+        - "enemy"
+        - "boss"
+        - "stage"
+        - "systems"
+        - "ui"
+        - "build"
+        - "ci"
+        - "agent"
     validations:
       required: true
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This work is large enough to require multiple independently valuable Features.
+          required: true
