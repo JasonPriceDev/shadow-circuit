@@ -13,7 +13,7 @@ import sys
 
 from agent_framework import create_harness_agent, todos_remaining
 from agent_framework._harness._file_access import FileSystemAgentFileStore
-from agent_framework.openai import OpenAIChatClient
+from agent_framework.openai import OpenAIChatCompletionClient
 
 from .instructions import SDL_AGENT_INSTRUCTIONS
 from .tools import (
@@ -118,7 +118,7 @@ async def _main() -> None:
         return
 
     agent_kwargs: dict = {
-        "client": OpenAIChatClient(
+        "client": OpenAIChatCompletionClient(
             model=os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-pro"),
             base_url="https://api.deepseek.com",
             api_key=os.environ["DEEPSEEK_API_KEY"],
