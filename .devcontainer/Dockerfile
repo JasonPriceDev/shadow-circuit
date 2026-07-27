@@ -17,6 +17,9 @@ RUN apt-get update \
         lsof \
         openssh-client \
         procps \
+        python3 \
+        python3-pip \
+        python3-venv \
         ripgrep \
         tree \
         unzip \

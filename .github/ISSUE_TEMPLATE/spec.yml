@@ -1,0 +1,64 @@
+name: Spec
+description: Propose a new specification for a feature, stage, boss, or system.
+title: "[Spec]: "
+labels: ["type:spec", "agent:generated"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A spec is the single source of truth for a piece of work. The SDLC agent
+        will read this, ask clarifying questions, and generate a task breakdown.
+        See `docs/specs/README.md` for the spec lifecycle.
+
+  - type: input
+    id: spec-file
+    attributes:
+      label: Spec file
+      description: Path to the spec Markdown file in `docs/specs/`.
+      placeholder: docs/specs/my-feature.md
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One paragraph describing what this spec covers and why.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Checklist of verifiable outcomes.
+      value: |
+        - [ ]
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: design
+    attributes:
+      label: Design notes
+      description: Mechanics, patterns, layouts, tuning values — whatever the agent needs to plan implementation.
+    validations:
+      required: false
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: What must exist before this can be built (other specs, systems, assets).
+    validations:
+      required: false
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks and open questions
+      description: What's uncertain, what could go wrong.
+    validations:
+      required: false

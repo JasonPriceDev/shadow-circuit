@@ -1,0 +1,6 @@
+agent-framework
+agent-framework-tools
+openai
+PyGithub
+rich
+python-dotenv

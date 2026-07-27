@@ -22,6 +22,21 @@ code .
 # Reopen in Container
 ```
 
+### DeepSeek model access in Copilot Chat
+
+The devcontainer automatically installs the [DeepSeek V4 for Copilot Chat](https://marketplace.visualstudio.com/items?itemName=vizards.deepseek-v4-for-copilot)
+extension, which adds DeepSeek V4 Pro/Flash to the Copilot Chat model picker. The
+extension is BYOK (bring your own key) and stores the key in VS Code's OS-level
+secret storage, never in a repo file, so it must be set once per environment:
+
+1. Get an API key from [platform.deepseek.com](https://platform.deepseek.com/).
+2. Open the Command Palette and run `DeepSeek: Set API Key`, then paste the key.
+3. In Copilot Chat, open the model picker and select **DeepSeek V4 Pro** or
+   **DeepSeek V4 Flash**.
+
+Re-run step 2 inside each new devcontainer instance, since secret storage does not
+persist across container rebuilds.
+
 ## Repository layout
 
 ```text

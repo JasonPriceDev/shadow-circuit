@@ -1,0 +1,37 @@
+name: SDLC Agent
+
+on:
+  issues:
+    types: [opened, edited, labeled]
+  pull_request:
+    types: [opened, synchronize]
+  schedule:
+    - cron: "0 6 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: "What should the agent do?"
+        required: true
+      dry_run:
+        description: "Preview only, don't write to GitHub"
+        type: boolean
+        default: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r agents/requirements.txt
+      - run: python agents/sdlc_agent/run.py
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL || 'deepseek-v4-pro' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TRIGGER_EVENT: ${{ github.event_name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || '' }}
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}

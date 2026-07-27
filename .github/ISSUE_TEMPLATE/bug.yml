@@ -1,0 +1,61 @@
+name: Bug
+description: Report a defect in the game.
+title: "[Bug]: "
+labels: ["type:bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The SDLC agent will triage this automatically — assigning severity,
+        attempting root-cause analysis, and proposing a fix. You are the
+        approver on any resulting PR.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Steps to reproduce, what you saw.
+      placeholder: |
+        1. Start the game.
+        2. Walk right into the first enemy.
+        3. Observe: health drains to zero in under a second.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: What should have happened instead.
+    validations:
+      required: true
+
+  - type: input
+    id: scene
+    attributes:
+      label: Scene or area
+      description: Which scene, stage, or boss this occurs in.
+      placeholder: StageScene (Lantern Rooftops)
+    validations:
+      required: false
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Console output
+      description: Any browser console errors or warnings.
+      render: text
+    validations:
+      required: false
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity (your estimate)
+      description: The agent will confirm or adjust this.
+      options:
+        - "critical: crash or unplayable"
+        - "major: wrong behavior"
+        - "minor: cosmetic or edge case"
+    validations:
+      required: true

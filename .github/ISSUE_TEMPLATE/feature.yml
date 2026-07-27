@@ -1,0 +1,55 @@
+name: Feature
+description: A task derived from a spec, ready for implementation.
+title: "[Feature]: "
+labels: ["type:feature", "agent:generated"]
+body:
+  - type: input
+    id: parent-spec
+    attributes:
+      label: Parent spec issue
+      description: Number of the parent `type:spec` issue this task belongs to.
+      placeholder: "#123"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What needs to be implemented. One coherent unit of work.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: How to verify this task is done.
+      value: |
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: files
+    attributes:
+      label: Files to create or modify
+      description: Expected file paths (the agent will determine exact paths during planning).
+      placeholder: |
+        - `src/scenes/StageScene.ts` (modify)
+        - `src/components/Invulnerability.ts` (create)
+    validations:
+      required: false
+
+  - type: dropdown
+    id: discipline
+    attributes:
+      label: Primary discipline
+      options:
+        - code
+        - art
+        - audio
+        - design
+        - qa
+    validations:
+      required: true
