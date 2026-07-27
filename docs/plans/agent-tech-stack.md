@@ -375,7 +375,6 @@ Runtime dependencies are pinned in `agents/requirements.txt`:
 agent-framework-core==1.11.0
 agent-framework-openai==1.11.0
 PyGithub==2.9.1
-rich==13.9.4
 python-dotenv==1.2.2
 ```
 
