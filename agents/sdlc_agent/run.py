@@ -11,9 +11,19 @@ import asyncio
 import os
 import sys
 
-from agent_framework import create_harness_agent, todos_remaining
+from agent_framework import create_harness_agent
+
+try:
+    from agent_framework import todos_remaining
+except ImportError:
+    todos_remaining = None  # type: ignore[assignment]
+
 from agent_framework.openai import OpenAIChatClient
-from agent_framework.file_memory import FileMemoryStore
+
+try:
+    from agent_framework.file_memory import FileMemoryStore
+except ImportError:
+    FileMemoryStore = None  # type: ignore[assignment]
 
 from .instructions import SDL_AGENT_INSTRUCTIONS
 from .tools import (
@@ -117,15 +127,15 @@ async def _main() -> None:
         print(f"[DRY RUN] Prompt:\n{_build_prompt()}")
         return
 
-    agent = create_harness_agent(
-        client=OpenAIChatClient(
+    agent_kwargs: dict = {
+        "client": OpenAIChatClient(
             model=os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-pro"),
             base_url="https://api.deepseek.com",
             api_key=os.environ["DEEPSEEK_API_KEY"],
         ),
-        name="sdlc-agent",
-        agent_instructions=SDL_AGENT_INSTRUCTIONS,
-        tools=[
+        "name": "sdlc-agent",
+        "agent_instructions": SDL_AGENT_INSTRUCTIONS,
+        "tools": [
             add_labels,
             comment_on_issue,
             create_branch,
@@ -138,12 +148,22 @@ async def _main() -> None:
             search_issues,
             update_issue,
         ],
-        memory_store=FileMemoryStore("./.github/agent-memory"),
-        max_context_window_tokens=128_000,
-        max_output_tokens=16_384,
-        loop_should_continue=todos_remaining(),
-        loop_max_iterations=15,
-    )
+        "max_context_window_tokens": 128_000,
+        "max_output_tokens": 16_384,
+        "loop_max_iterations": 15,
+    }
+
+    if FileMemoryStore is not None:
+        agent_kwargs["memory_store"] = FileMemoryStore("./.github/agent-memory")
+    else:
+        print("[WARN] FileMemoryStore not available — agent state will not persist between runs.")
+
+    if todos_remaining is not None:
+        agent_kwargs["loop_should_continue"] = todos_remaining()
+    else:
+        print("[WARN] todos_remaining not available — agent will run single-pass only.")
+
+    agent = create_harness_agent(**agent_kwargs)
 
     prompt = _build_prompt()
     print(f"Trigger: {os.environ.get('TRIGGER_EVENT', 'manual')}")
