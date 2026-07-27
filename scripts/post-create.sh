@@ -22,3 +22,12 @@ set +a
 git config --global user.name "$GIT_USER_NAME"
 git config --global user.email "$GIT_USER_EMAIL"
 npm ci
+
+# ---------------------------------------------------------------------------
+# Python agent dependencies
+# ---------------------------------------------------------------------------
+agent_venv="$workspace_dir/agents/.venv"
+if [[ ! -d "$agent_venv" ]]; then
+  python3 -m venv "$agent_venv"
+fi
+"$agent_venv/bin/pip" install -q -r "$workspace_dir/agents/requirements.txt"

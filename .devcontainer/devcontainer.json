@@ -25,6 +25,7 @@
       "extensions": [
         "dbaeumer.vscode-eslint",
         "esbenp.prettier-vscode",
+        "ms-python.python",
         "vizards.deepseek-v4-for-copilot"
       ],
       "settings": {
