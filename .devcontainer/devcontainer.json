@@ -42,8 +42,7 @@
         "chat.exploreAgent.defaultModel": "DeepSeek V4 Pro (deepseek)",
         "github.copilot.selectedCompletionModel": "DeepSeek V4 Pro (deepseek)",
         "inlineChat.defaultModel": "DeepSeek V4 Pro (deepseek)",
-        "chat.utilitySmallModel": "deepseek/deepseek-v4-flash",
-
+        "chat.utilitySmallModel": "deepseek/deepseek-v4-flash"
       }
 
     }
