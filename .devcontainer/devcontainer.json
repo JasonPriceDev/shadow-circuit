@@ -26,6 +26,7 @@
         "dbaeumer.vscode-eslint",
         "esbenp.prettier-vscode",
         "ms-python.python",
+        "ms-azuretools.vscode-docker",
         "vizards.deepseek-v4-for-copilot"
       ],
       "settings": {
