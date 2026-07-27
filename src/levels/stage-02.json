@@ -1,0 +1,20 @@
+{
+  "version": "1.10",
+  "type": "map",
+  "orientation": "orthogonal",
+  "renderorder": "right-down",
+  "width": 50,
+  "height": 17,
+  "tilewidth": 32,
+  "tileheight": 32,
+  "layers": [
+    {
+      "id": 1,
+      "name": "Ground",
+      "type": "tilelayer",
+      "width": 50,
+      "height": 17,
+      "data": []
+    }
+  ]
+}

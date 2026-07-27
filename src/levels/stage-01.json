@@ -1,0 +1,41 @@
+{
+  "version": "1.10",
+  "type": "map",
+  "orientation": "orthogonal",
+  "renderorder": "right-down",
+  "width": 50,
+  "height": 17,
+  "tilewidth": 32,
+  "tileheight": 32,
+  "layers": [
+    {
+      "id": 1,
+      "name": "Ground",
+      "type": "tilelayer",
+      "width": 50,
+      "height": 17,
+      "data": []
+    },
+    {
+      "id": 2,
+      "name": "Entities",
+      "type": "objectgroup",
+      "objects": [
+        {
+          "id": 1,
+          "name": "player-start",
+          "type": "spawn",
+          "x": 96,
+          "y": 448
+        },
+        {
+          "id": 2,
+          "name": "iron-crane",
+          "type": "boss",
+          "x": 1248,
+          "y": 448
+        }
+      ]
+    }
+  ]
+}
