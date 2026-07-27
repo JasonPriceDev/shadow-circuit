@@ -5,6 +5,15 @@ dist/
 .env.*
 !.env.example
 
+# Python virtual environment
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Agent memory (generated at runtime)
+.github/agent-memory/
+
 # Local Tiled and editor files
 *.aseprite~
 *.tmj.bak

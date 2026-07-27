@@ -11,19 +11,9 @@ import asyncio
 import os
 import sys
 
-from agent_framework import create_harness_agent
-
-try:
-    from agent_framework import todos_remaining
-except ImportError:
-    todos_remaining = None  # type: ignore[assignment]
-
+from agent_framework import create_harness_agent, todos_remaining
+from agent_framework._harness._file_access import FileSystemAgentFileStore
 from agent_framework.openai import OpenAIChatClient
-
-try:
-    from agent_framework.file_memory import FileMemoryStore
-except ImportError:
-    FileMemoryStore = None  # type: ignore[assignment]
 
 from .instructions import SDL_AGENT_INSTRUCTIONS
 from .tools import (
@@ -153,15 +143,10 @@ async def _main() -> None:
         "loop_max_iterations": 15,
     }
 
-    if FileMemoryStore is not None:
-        agent_kwargs["memory_store"] = FileMemoryStore("./.github/agent-memory")
-    else:
-        print("[WARN] FileMemoryStore not available — agent state will not persist between runs.")
-
-    if todos_remaining is not None:
-        agent_kwargs["loop_should_continue"] = todos_remaining()
-    else:
-        print("[WARN] todos_remaining not available — agent will run single-pass only.")
+    agent_kwargs["file_memory_store"] = FileSystemAgentFileStore(
+        root_directory="./.github/agent-memory",
+    )
+    agent_kwargs["loop_should_continue"] = todos_remaining()
 
     agent = create_harness_agent(**agent_kwargs)
 
