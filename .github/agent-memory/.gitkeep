@@ -1,0 +1,10 @@
+# Agent memory directory
+
+This directory is managed by the SDLC harness agent's `FileMemoryProvider`.
+Files written here persist between workflow runs and are committed to the
+repository so agent state is version-controlled and reviewable.
+
+- `sessions/` — per-session working notes (auto-created by the harness)
+- `notes.md` — durable cross-session memory (auto-created by the harness)
+
+Do not edit these files manually unless debugging agent behavior.

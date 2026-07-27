@@ -1,0 +1,123 @@
+name: Bug
+description: Report a reproducible defect in the game, build, CI, or agent.
+title: "[Bug]: "
+labels:
+  - "type:bug"
+  - "status:proposed"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe observable behavior and provide enough detail to reproduce it.
+        The SDLC agent will check for duplicates, propose area and severity
+        labels, investigate likely causes, and post a fix plan. Implementation
+        still requires the `approve:implement` label.
+
+  - type: input
+    id: parent
+    attributes:
+      label: Related Spec, Epic, or Feature
+      description: Link the closest parent issue when one exists.
+      placeholder: "#123 or None"
+    validations:
+      required: false
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: List the smallest reliable sequence that demonstrates the defect.
+      placeholder: |
+        1. Start the game.
+        2. Enter Lantern Rooftops.
+        3. Walk into the first enemy.
+        4. Observe the health display.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Describe exactly what happened, including frequency or timing.
+      placeholder: Health drains from full to zero in under one second.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Describe the observable behavior that should occur instead.
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: Scene, stage, boss, or system
+      description: Identify the most specific affected area you know.
+      placeholder: StageScene — Lantern Rooftops
+    validations:
+      required: false
+
+  - type: input
+    id: revision
+    attributes:
+      label: Revision or build
+      description: Commit SHA, branch, PR, release, or approximate date observed.
+      placeholder: main at abc1234
+    validations:
+      required: false
+
+  - type: dropdown
+    id: reproducibility
+    attributes:
+      label: Reproducibility
+      options:
+        - "Always"
+        - "Often"
+        - "Sometimes"
+        - "Once"
+        - "Unknown"
+    validations:
+      required: true
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Console output
+      description: Paste relevant browser, build, or workflow errors. Remove secrets first.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Additional evidence
+      description: Add screenshots, recordings, save-state details, or related links.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity estimate
+      description: The agent will propose the final severity label; the human may override it.
+      options:
+        - "Critical — crash, broken build, data loss, or unplayable game"
+        - "Major — materially wrong behavior or blocked gameplay"
+        - "Minor — cosmetic issue, isolated edge case, or polish"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Reporter checks
+      options:
+        - label: I searched for an existing issue describing this defect.
+          required: true
+        - label: I removed credentials, tokens, and other secrets from the report.
+          required: true
