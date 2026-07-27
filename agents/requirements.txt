@@ -1,5 +1,4 @@
 agent-framework>=1.0,<2.0
-agent-framework-tools>=1.0,<2.0
 openai>=1.0,<2.0
 PyGithub>=2.0,<3.0
 rich>=13.0,<14.0
