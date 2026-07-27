@@ -107,19 +107,33 @@ Specs are the single source of truth. The flow:
 Human writes/revises a spec in docs/specs/
   → Human opens a type:spec issue
     → You read the spec, ask clarifying questions
-      → You generate a plan (task checklist comment)
-        → You create one type:feature issue per task
-          → Each task gets labeled ready-for-scaffold
-            → You create a branch and open one draft PR per task
-              → CI runs (typecheck + build)
-                → Human reviews and merges
+      → Spec approved → You generate a Plan
+        → Plan broken into Epics (or Features if small)
+          → Epics broken into Features
+            → Features broken into Tasks (one PR each)
+              → Each Task labeled ready-for-scaffold
+                → You create a branch and open one draft PR per Task
+                  → CI runs (typecheck + build)
+                    → Human reviews and merges
+```
+
+### Issue Hierarchy
+
+```
+Spec (top-level, only broken out if size warrants)
+  └── Plan (agent-generated from the approved spec)
+        └── Epics (large bodies of work — a stage, boss, or major system)
+              └── Features (medium work units within an Epic)
+                    └── Tasks (smallest unit — one PR per task)
+
+Bugs are separate — logged against a Feature (or Epic if the feature doesn't exist yet).
 ```
 
 ### Issue Taxonomy
 
 | Label Group | Values |
 |---|---|
-| `type:` | `spec`, `feature`, `bug`, `chore`, `research` |
+| `type:` | `spec`, `epic`, `feature`, `task`, `bug`, `chore`, `research` |
 | `area:` | `player`, `enemy`, `boss`, `stage`, `systems`, `ui`, `build`, `ci` |
 | `discipline:` | `code`, `art`, `audio`, `design`, `qa` |
 | `severity:` | `critical` (crashes/build breaks), `major` (wrong behavior), `minor` (cosmetic/polish) — bugs only |
@@ -150,7 +164,7 @@ A task is Done only when ALL of these are true:
 - `npm run typecheck` passes
 - `npm run build` passes
 - Lint passes (once ESLint is configured)
-- Acceptance criteria from the parent spec are satisfied
+- Acceptance criteria from the parent Feature and root Spec are satisfied
 - Scene behavior has been manually verified (or covered by a test)
 - The human has approved and merged the PR
 
@@ -172,14 +186,18 @@ When invoked, read the `TRIGGER_EVENT` environment variable to determine why you
 1. Summary of what you understand the spec to mean.
 2. Any inconsistencies or missing information.
 3. Specific clarifying questions.
-4. A preliminary task breakdown (checkbox list) — mark it "Draft — awaiting your answers."
+4. If the spec is small enough, a preliminary Feature breakdown. If large, note that Epics will be needed.
 
-**If `type:bug`**: Assign `severity:` label based on impact. Read relevant source files to attempt root-cause analysis. Post a comment with:
+**If `type:epic`**: Verify the parent Spec is linked. Assign `area:` label. Prepare to break into Features when labeled `ready-for-planning`.
+
+**If `type:feature`**: Verify the parent Epic (or Spec if no Epic). Assign `area:` and `discipline:` labels. Prepare to break into Tasks when labeled `ready-for-planning`.
+
+**If `type:task`**: Verify the parent Feature is linked. Confirm file list and acceptance criteria. This is the level where PRs happen — when labeled `ready-for-scaffold`, create one draft PR.
+
+**If `type:bug`**: Verify the linked Feature or Epic. Assign `severity:` label based on impact. Read relevant source files to attempt root-cause analysis. Post a comment with:
 1. What you think the root cause is (with file paths and line numbers).
 2. A proposed fix plan (checkbox list).
 3. Ask: "Does this analysis look correct? Shall I proceed with the fix?"
-
-**If `type:feature`**: Read the linked spec. Check that dependencies are tracked and the spec is clear. Assign `area:` and `discipline:` labels. Assign to the appropriate milestone.
 
 **If untyped**: Assign `type:`, `area:`, and `discipline:` labels. Check for duplicates. If you cannot classify it, comment asking the human what kind of issue this is.
 
@@ -189,23 +207,28 @@ Re-triage if the body changed substantially. Do not re-triage for minor edits (t
 
 ### `issues.labeled` with `ready-for-planning`
 
-Switch to plan mode. Read the issue, its linked spec, and all related design docs. Post a detailed task breakdown as a checklist comment. Each checkbox should be one implementable task. Mark the comment with `agent:generated`.
+Switch to plan mode. Read the issue, its linked parent issues, and all related design docs. Post a breakdown at the appropriate level:
+- On a **Spec**: break into Epics (or Features if small).
+- On an **Epic**: break into Features.
+- On a **Feature**: break into Tasks.
 
-### `issues.labeled` with `ready-for-scaffold`
+Each item should be a checkbox. Mark the comment with `agent:generated`.
+
+### `issues.labeled` with `ready-for-scaffold` (on a Task)
 
 1. Create a branch from `main` named `agent/<issue-number>-<slug>`.
 2. Open one draft PR with file stubs, TODOs, and imports matching repo conventions.
-3. Reference the task issue and parent spec in the PR body.
+3. Reference the Task, parent Feature, and root Spec in the PR body.
 4. Do NOT implement logic — only scaffolding. The human will approve or ask for changes before implementation begins.
 
 ### `pull_request.opened`
 
 Review the diff. Comment a structured checklist:
 1. Does CI pass? (typecheck + build)
-2. Does the PR reference its parent spec and task issue?
+2. Does the PR reference its root Spec, parent Feature, and Task?
 3. Does it follow repo conventions (PascalCase, named exports, relative imports, double quotes, semicolons)?
 4. Are there any patterns from the "Known Code-Level Issues" list above?
-5. Is the PR scope contained to one task?
+5. Is the PR scope contained to one Task?
 6. Any missing tests or acceptance criteria gaps?
 
 Do NOT approve or request changes — only comment your observations.

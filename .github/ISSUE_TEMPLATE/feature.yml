@@ -1,22 +1,31 @@
 name: Feature
-description: A task derived from a spec, ready for implementation.
+description: A medium work unit within an Epic. Broken into Tasks by the agent.
 title: "[Feature]: "
 labels: ["type:feature", "agent:generated"]
 body:
   - type: input
-    id: parent-spec
+    id: parent-epic
     attributes:
-      label: Parent spec issue
-      description: Number of the parent `type:spec` issue this task belongs to.
+      label: Parent Epic
+      description: Number of the parent `type:epic` issue this feature belongs to.
       placeholder: "#123"
     validations:
       required: true
+
+  - type: input
+    id: parent-spec
+    attributes:
+      label: Parent Spec (if no Epic)
+      description: Number of the parent `type:spec` issue (only if this feature is not under an Epic).
+      placeholder: "#100"
+    validations:
+      required: false
 
   - type: textarea
     id: description
     attributes:
       label: Description
-      description: What needs to be implemented. One coherent unit of work.
+      description: What this feature covers. The agent will break this into Tasks.
     validations:
       required: true
 
@@ -24,7 +33,7 @@ body:
     id: acceptance
     attributes:
       label: Acceptance criteria
-      description: How to verify this task is done.
+      description: How to verify this feature is done (all its Tasks complete).
       value: |
         - [ ]
     validations:
@@ -33,7 +42,7 @@ body:
   - type: textarea
     id: files
     attributes:
-      label: Files to create or modify
+      label: Files likely involved
       description: Expected file paths (the agent will determine exact paths during planning).
       placeholder: |
         - `src/scenes/StageScene.ts` (modify)

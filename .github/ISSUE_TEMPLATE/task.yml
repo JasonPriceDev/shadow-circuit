@@ -1,0 +1,66 @@
+name: Task
+description: The smallest unit of work. One pull request per task.
+title: "[Task]: "
+labels: ["type:task", "agent:generated"]
+body:
+  - type: input
+    id: parent-feature
+    attributes:
+      label: Parent Feature
+      description: Number of the parent `type:feature` issue this task belongs to.
+      placeholder: "#200"
+    validations:
+      required: true
+
+  - type: input
+    id: parent-spec
+    attributes:
+      label: Root Spec
+      description: Number of the top-level `type:spec` issue (for traceability).
+      placeholder: "#100"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: One implementable piece of work. Exactly one pull request.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: How to verify this task is done.
+      value: |
+        - [ ] `npm run typecheck` passes
+        - [ ] `npm run build` passes
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: files
+    attributes:
+      label: Files to create or modify
+      description: Specific file paths.
+      placeholder: |
+        - `src/components/Invulnerability.ts` (create)
+        - `src/scenes/StageScene.ts` (modify L31-L34)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: discipline
+    attributes:
+      label: Primary discipline
+      options:
+        - code
+        - art
+        - audio
+        - design
+        - qa
+    validations:
+      required: true

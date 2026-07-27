@@ -1,23 +1,23 @@
 name: Spec
-description: Propose a new specification for a feature, stage, boss, or system.
+description: Propose a top-level specification. Once approved, the agent generates a plan breaking it into Epics, Features, and Tasks.
 title: "[Spec]: "
 labels: ["type:spec", "agent:generated"]
 body:
   - type: markdown
     attributes:
       value: |
-        A spec is the single source of truth for a piece of work. The SDLC agent
-        will read this, ask clarifying questions, and generate a task breakdown.
-        See `docs/specs/README.md` for the spec lifecycle.
+        A spec is the single source of truth for a body of work. Once you approve
+        this spec, the SDLC agent will generate a plan and break it down into
+        **Epics → Features → Tasks**. See `docs/specs/README.md` for the lifecycle.
 
   - type: input
     id: spec-file
     attributes:
       label: Spec file
-      description: Path to the spec Markdown file in `docs/specs/`.
-      placeholder: docs/specs/my-feature.md
+      description: Path to the spec Markdown file in `docs/specs/` (optional if small).
+      placeholder: docs/specs/lantern-rooftops.md
     validations:
-      required: true
+      required: false
 
   - type: textarea
     id: summary
@@ -31,7 +31,7 @@ body:
     id: acceptance
     attributes:
       label: Acceptance criteria
-      description: Checklist of verifiable outcomes.
+      description: Checklist of verifiable outcomes at the spec level.
       value: |
         - [ ]
         - [ ]
@@ -51,7 +51,7 @@ body:
     id: dependencies
     attributes:
       label: Dependencies
-      description: What must exist before this can be built (other specs, systems, assets).
+      description: What must exist before this can be built.
     validations:
       required: false
 
@@ -62,3 +62,14 @@ body:
       description: What's uncertain, what could go wrong.
     validations:
       required: false
+
+  - type: dropdown
+    id: size
+    attributes:
+      label: Does this need to be broken into Epics?
+      description: Small specs can skip the Epic layer and go straight to Features.
+      options:
+        - "Yes — break into Epics"
+        - "No — go straight to Features"
+    validations:
+      required: true

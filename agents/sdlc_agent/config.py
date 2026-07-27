@@ -21,7 +21,9 @@ class RepoConfig:
 
     type_labels: list[str] = field(default_factory=lambda: [
         "type:spec",
+        "type:epic",
         "type:feature",
+        "type:task",
         "type:bug",
         "type:chore",
         "type:research",

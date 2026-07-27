@@ -4,8 +4,9 @@
 
 ## References
 
-- **Parent spec**: #<!-- spec issue number -->
-- **Task issue**: #<!-- task issue number -->
+- **Root spec**: #<!-- spec issue number -->
+- **Parent feature**: #<!-- feature issue number -->
+- **Task**: #<!-- task issue number (this is the issue this PR closes) -->
 
 ## Changes
 
@@ -17,7 +18,7 @@
 - [ ] `npm run build` passes
 - [ ] Follows repo conventions (PascalCase, named exports, double quotes, semicolons)
 - [ ] Code is scoped to one task
-- [ ] Acceptance criteria from the parent spec are satisfied
+- [ ] Acceptance criteria from the parent feature and root spec are satisfied
 
 ## Notes for reviewer
 

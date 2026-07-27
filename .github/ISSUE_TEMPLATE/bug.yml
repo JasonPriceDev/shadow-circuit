@@ -1,5 +1,5 @@
 name: Bug
-description: Report a defect in the game.
+description: Report a defect. Logged against a Feature or Epic.
 title: "[Bug]: "
 labels: ["type:bug"]
 body:
@@ -7,8 +7,17 @@ body:
     attributes:
       value: |
         The SDLC agent will triage this automatically — assigning severity,
-        attempting root-cause analysis, and proposing a fix. You are the
-        approver on any resulting PR.
+        attempting root-cause analysis, and proposing a fix. Bugs are logged
+        against a Feature (or Epic if the feature doesn't exist yet).
+
+  - type: input
+    id: parent
+    attributes:
+      label: Linked Feature or Epic
+      description: Number of the Feature or Epic issue this bug belongs to.
+      placeholder: "#123"
+    validations:
+      required: true
 
   - type: textarea
     id: what-happened

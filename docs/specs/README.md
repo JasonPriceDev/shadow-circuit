@@ -1,13 +1,30 @@
 # Specs
 
-This directory is the single source of truth for feature, stage, boss, and system specifications. Every significant piece of work starts as a spec before any code is written.
+This directory is the single source of truth for feature, stage, boss, and system
+specifications. Every significant piece of work starts as a spec before any code is
+written.
+
+## Issue hierarchy
+
+```
+Spec (top-level, only broken out if size warrants)
+  └── Plan (agent-generated from the approved spec)
+        └── Epics (large bodies of work — a stage, boss, or major system)
+              └── Features (medium work units within an Epic)
+                    └── Tasks (smallest unit — one pull request per task)
+
+Bugs are separate — logged against a Feature (or Epic if the feature doesn't exist yet).
+```
 
 ## Spec lifecycle
 
 ```
 You write a spec → Open a type:spec issue → Agent reads it, asks questions
-  → Agent generates a plan (task checklist) → Agent opens one issue per task
-    → Each task gets one draft PR → CI passes → You approve and merge → Done
+  → Spec approved → Agent generates a Plan
+    → Plan broken into Epics (or Features if small)
+      → Each Epic broken into Features
+        → Each Feature broken into Tasks
+          → Each Task gets one draft PR → CI passes → You approve and merge
 ```
 
 ## Spec format
@@ -41,7 +58,15 @@ What's uncertain, what could go wrong.
 See `docs/plans/concept.md` for the game-level design document.
 See `docs/plans/tech-stack.md` for the engineering decisions document.
 
-## Existing specs
+## Issue types
+
+| Type | Purpose | Parent | PRs? |
+|---|---|---|---|
+| `type:spec` | Top-level specification | — | No |
+| `type:epic` | Large body of work (stage, boss, system) | Spec | No |
+| `type:feature` | Medium work unit | Epic (or Spec if no Epic) | No |
+| `type:task` | Smallest unit of work | Feature | **Yes — one PR per task** |
+| `type:bug` | Defect | Feature or Epic | Yes (fix PR) |
 
 | Spec | Covers | Status |
 |---|---|---|

@@ -1,0 +1,47 @@
+name: Epic
+description: A large body of work within a Spec, broken into Features by the agent.
+title: "[Epic]: "
+labels: ["type:epic", "agent:generated"]
+body:
+  - type: input
+    id: parent-spec
+    attributes:
+      label: Parent Spec
+      description: Number of the parent `type:spec` issue this Epic belongs to.
+      placeholder: "#100"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What this Epic covers. The agent will break this into Features.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: How to verify this Epic is done (all its Features complete).
+      value: |
+        - [ ]
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - player
+        - enemy
+        - boss
+        - stage
+        - systems
+        - ui
+        - build
+        - ci
+    validations:
+      required: true

@@ -134,9 +134,12 @@ When a `type:spec` issue is opened or a spec file is added to `docs/specs/`:
 1. Read the spec and all related design docs (`concept.md`, `tech-stack.md`, `StageCatalog.ts`).
 2. Check for internal consistency (does the spec contradict the concept doc? Are dependencies tracked?).
 3. Ask clarifying questions if anything is ambiguous or missing.
-4. Once the spec is clear, post a task breakdown comment with a checkbox list — one task per checkbox.
-5. Create one GitHub Issue per task, each with `type:feature` and the appropriate `area:` / `discipline:` labels, all linked to the parent spec issue.
-6. Do **not** open PRs until each task issue is labeled `ready-for-scaffold`.
+4. Once the spec is approved, generate a Plan.
+5. Break the Plan into **Epics** (or Features if the spec is small enough to skip Epics).
+6. Break each Epic into **Features**.
+7. Break each Feature into **Tasks** — one implementable unit per checkbox.
+8. Create GitHub Issues at each level with the appropriate `type:` label, all linked upward to their parent.
+9. Do **not** open PRs until each Task is labeled `ready-for-scaffold`.
 
 ### 5.4 Existing specs in this repo
 
@@ -152,7 +155,7 @@ Bugs are reported by you and managed through GitHub Issues by the agent.
 
 ### 6.1 How you report a bug
 
-1. Open a GitHub Issue with `type:bug`.
+1. Open a GitHub Issue with `type:bug`, linked to the parent Feature (or Epic) it affects.
 2. Include: what you did, what you expected, what happened, which scene/boss/stage, any console errors.
 3. The agent triages it automatically (see §9.3).
 
@@ -348,16 +351,18 @@ jobs:
 
 | Trigger | Agent's first action |
 |---|---|
-| `issues.opened` with `type:spec` | Spec review: read the spec file in `docs/specs/`, check consistency with `concept.md` and `StageCatalog.ts`, ask clarifying questions, generate task breakdown |
-| `issues.opened` with `type:bug` | Bug triage: read the issue, assign `severity:` label, attempt root-cause analysis, propose fix plan, ask for confirmation |
-| `issues.opened` with `type:feature` | Feature triage: read linked spec, check dependencies, assign `area:` / `discipline:` labels, assign milestone |
-| `issues.opened` (untyped) | Triage: assign `type:`, `area:`, `discipline:` labels, check for duplicates, ask the human for clarification if unclassifiable |
-| `issues.edited` | Re-triage if body changed substantially |
-| `issues.labeled` with `ready-for-planning` | Plan mode: read the issue + linked spec + design docs, create a todo list, post task breakdown as a comment |
-| `issues.labeled` with `ready-for-scaffold` | Create a branch, open one draft PR with file stubs matching repo conventions, link to task issue and parent spec |
-| `pull_request.opened` | PR readiness: review diff, check CI status, comment a structured Definition-of-Done checklist |
-| `nightly schedule` | Backlog curation: check for stale issues, un-tracked stages, duplicate detection, spec-to-issue coverage gaps |
-| `workflow_dispatch` | Whatever the `prompt` input says — full interactive agent session |
+| `issues.opened` with `type:spec` | Spec review: read the spec, check consistency, ask clarifying questions. Once approved, generate a Plan broken into Epics → Features → Tasks. |
+| `issues.opened` with `type:bug` | Bug triage: verify linked Feature/Epic, assign `severity:`, attempt root-cause analysis, propose fix plan, ask for confirmation. |
+| `issues.opened` with `type:epic` | Epic triage: verify parent Spec, assign `area:` label, prepare to break into Features. |
+| `issues.opened` with `type:feature` | Feature triage: verify parent Epic/Spec, assign `area:` and `discipline:` labels, prepare to break into Tasks. |
+| `issues.opened` with `type:task` | Task triage: verify parent Feature, confirm file list and acceptance criteria. This is the level where PRs happen. |
+| `issues.opened` (untyped) | Triage: assign `type:`, `area:`, `discipline:` labels, check for duplicates, ask the human if unclassifiable. |
+| `issues.edited` | Re-triage if body changed substantially. |
+| `issues.labeled` with `ready-for-planning` | Plan mode: read the issue + linked parents + design docs, create a todo list, post breakdown as a comment at the appropriate level. |
+| `issues.labeled` with `ready-for-scaffold` (on a Task) | Create a branch, open one draft PR with file stubs matching repo conventions, link to the Task and all parent issues. |
+| `pull_request.opened` | PR readiness: review diff, check CI status, comment a structured Definition-of-Done checklist. Verify the PR references a single Task. |
+| `nightly schedule` | Backlog curation: check for stale issues, un-tracked stages, duplicate detection, spec-to-task coverage gaps. |
+| `workflow_dispatch` | Whatever the `prompt` input says — full interactive agent session. |
 
 ## 10. Repository layout after implementation
 
@@ -371,8 +376,10 @@ jobs:
 │   └── notes.md                # durable cross-session memory
 ├── ISSUE_TEMPLATE/
 │   ├── spec.yml                # for type:spec issues
+│   ├── epic.yml                # for type:epic issues
 │   ├── feature.yml             # for type:feature issues
-│   └── bug.yml                 # for type:bug issues
+│   ├── task.yml                # for type:task issues (one PR each)
+│   └── bug.yml                 # for type:bug issues (linked to feature/epic)
 └── PULL_REQUEST_TEMPLATE.md
 
 docs/
