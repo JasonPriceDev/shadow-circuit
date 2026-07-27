@@ -269,13 +269,11 @@ implementation approval unless emergency policy is separately documented.
 
 | Tool | Purpose |
 |---|---|
-| `read_repo_file(path, ref)` | Read a repository file at an explicit revision |
-| `list_repo_files(path, ref)` | Discover files within an allowed path |
+| `read_repo_file(path)` | Read a UTF-8 file from the checked-out repository |
 | `search_issues(query)` | Search issues and existing proposal markers |
 | `get_issue(number)` | Read an issue and comments |
-| `get_pull_request(number)` | Read PR metadata and linked issue |
-| `get_pull_request_diff(number)` | Inspect changed files and patches |
-| `get_check_runs(ref)` | Read CI status and logs/URLs |
+| `get_pull_request(number)` | Read PR metadata, changed files, and patches |
+| `get_check_runs(ref)` | Read CI check status and URLs |
 | `get_review_comments(number)` | Read actionable review feedback |
 
 ### 9.2 Mutation tools
@@ -283,16 +281,18 @@ implementation approval unless emergency policy is separately documented.
 | Tool | Required authorization |
 |---|---|
 | `comment_on_issue(number, body, marker)` | Allowed for managed issues; dry-run aware |
-| `replace_status_label(number, label)` | Allowed for managed issues; dry-run aware |
+| `replace_status_label(number, status)` | Allowed except `status:done`; dry-run aware |
 | `add_taxonomy_labels(number, labels)` | Allowed for managed issues; dry-run aware |
-| `consume_approval_label(number, label, proposal_id)` | Matching unconsumed approval |
-| `create_issue(...)` | `approve:create-issues` |
+| `record_plan_approval(proposal_id)` | `approve:plan` |
+| `create_issue(..., proposal_id, item_id)` | `approve:create-issues` |
 | `update_issue(...)` | Matching approval when scope/state changes materially |
-| `create_branch(name, base_sha)` | `approve:implement` |
-| `apply_patch(branch, patch, expected_sha)` | `approve:implement` |
-| `commit_and_push(branch, message, expected_sha)` | `approve:implement` |
+| `create_branch(name, proposal_id, base_sha)` | `approve:implement` |
+| `upsert_repo_file(..., expected_sha)` | `approve:implement` or `approve:revise` |
 | `create_or_update_draft_pr(...)` | `approve:implement` |
-| `close_issue(number)` | `approve:close`, or merged PR plus explicit policy |
+
+After a successful protected operation, the runner consumes the triggering
+approval label and records an audit comment. It does not consume an approval
+when the required operation fails.
 
 All path-taking tools reject absolute paths, traversal, symlink escape, and
 modification outside an allowlist. Changes to these paths require a separate
@@ -300,9 +300,10 @@ human-authored PR and are denied to the agent by default:
 
 - `.github/workflows/`
 - `.github/CODEOWNERS`
+- `AGENTS.md` and `.github/instructions/`
 - `agents/sdlc_agent/instructions.py`
 - Agent authentication or permission configuration
-- Dependency manifests and lockfiles, unless the Task explicitly authorizes them
+- Dependency manifests and lockfiles
 
 ### 9.3 Local validation tools
 
@@ -484,6 +485,8 @@ jobs:
           DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL || 'deepseek-v4-pro' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TRIGGER_EVENT: ${{ github.event_name }}
+          GITHUB_EVENT_ACTION: ${{ github.event.action || '' }}
+          GITHUB_EVENT_LABEL_NAME: ${{ github.event.label.name || '' }}
           ISSUE_NUMBER: ${{ github.event.issue.number || '' }}
           PR_NUMBER: ${{ github.event.pull_request.number || '' }}
           MANUAL_PROMPT: ${{ inputs.prompt || '' }}

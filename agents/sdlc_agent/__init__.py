@@ -1,1 +1,1 @@
-"""Shadow Circuit SDLC harness agent package."""
+"""Shadow Circuit SDLC harness agent."""

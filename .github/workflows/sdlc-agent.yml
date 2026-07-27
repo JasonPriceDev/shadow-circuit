@@ -75,6 +75,8 @@ jobs:
           DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL || 'deepseek-v4-pro' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TRIGGER_EVENT: ${{ github.event_name }}
+          GITHUB_EVENT_ACTION: ${{ github.event.action || '' }}
+          GITHUB_EVENT_LABEL_NAME: ${{ github.event.label.name || '' }}
           ISSUE_NUMBER: ${{ github.event.issue.number || '' }}
           PR_NUMBER: ${{ github.event.pull_request.number || '' }}
           MANUAL_PROMPT: ${{ inputs.prompt || '' }}

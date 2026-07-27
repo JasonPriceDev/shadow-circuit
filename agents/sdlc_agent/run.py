@@ -1,165 +1,154 @@
-"""Entry point for the Shadow Circuit SDLC harness agent.
-
-Invoked by .github/workflows/sdlc-agent.yml. Reads environment variables to
-determine the trigger event and constructs a prompt, then runs the harness agent
-with instructions from instructions.py and tools from tools.py.
-"""
+"""Entry point for the Shadow Circuit SDLC harness agent."""
 
 from __future__ import annotations
 
 import asyncio
 import os
-import sys
 
 from agent_framework import create_harness_agent, todos_remaining
-from agent_framework._harness._file_access import FileSystemAgentFileStore
 from agent_framework.openai import OpenAIChatCompletionClient
+from dotenv import load_dotenv
 
-from .instructions import SDL_AGENT_INSTRUCTIONS
+from .instructions import SDLC_AGENT_INSTRUCTIONS
 from .tools import (
-    add_labels,
+    add_taxonomy_labels,
     comment_on_issue,
+    consume_current_approval,
     create_branch,
     create_issue,
-    create_pull_request,
+    create_or_update_draft_pr,
+    get_check_runs,
     get_issue,
+    get_pull_request,
+    get_review_comments,
     read_repo_file,
+    record_plan_approval,
+    replace_status_label,
     run_build,
+    run_npm_ci,
     run_typecheck,
     search_issues,
     update_issue,
+    upsert_repo_file,
 )
 
 
+def _env(name: str, default: str = "") -> str:
+    return os.environ.get(name, default).strip()
+
+
 def _build_prompt() -> str:
-    """Determine what the agent should do based on the trigger event."""
-    trigger = os.environ.get("TRIGGER_EVENT", "manual")
+    trigger = _env("TRIGGER_EVENT", "workflow_dispatch")
+    action = _env("GITHUB_EVENT_ACTION")
+    issue = _env("ISSUE_NUMBER")
+    pr = _env("PR_NUMBER")
+    label = _env("GITHUB_EVENT_LABEL_NAME")
+
+    context = (
+        f"Trigger={trigger}; action={action or 'none'}; "
+        f"issue={issue or 'none'}; pr={pr or 'none'}; label={label or 'none'}."
+    )
 
     if trigger == "workflow_dispatch":
-        return os.environ.get("PROMPT", "Review the repository state and report.")
-
+        return f"{context}\n\n{_env('MANUAL_PROMPT', 'Audit repository state and report.')}"
     if trigger == "schedule":
         return (
-            "Nightly backlog curation: check for stale issues (no activity in "
-            "14+ days), un-tracked stages compared to src/levels/StageCatalog.ts, "
-            "duplicate detection by title similarity, and spec-to-issue coverage "
-            "gaps. Post findings as a single comment on the backlog-health issue "
-            "(create it if it does not exist)."
+            f"{context}\n\nProduce one read-only backlog report: stale work, "
+            "duplicates, StageCatalog coverage, Spec-to-Task gaps, blocked work, "
+            "and milestone health. Do not create or modify resources."
         )
-
-    if trigger == "pull_request" or trigger == "pull_request_target":
-        pr_number = os.environ.get("PR_NUMBER", "")
+    if trigger == "pull_request":
         return (
-            f"PR #{pr_number} was opened or updated. Review the diff, check CI "
-            "status, and comment a structured Definition-of-Done checklist: "
-            "1) CI status, 2) references to parent spec and task issue, "
-            "3) repo conventions, 4) anti-patterns from the known-defects list, "
-            "5) scope containment, 6) test/acceptance gaps."
+            f"{context}\n\nReview PR #{pr}: read its diff, checks, and review "
+            "comments; verify one-Task scope, parent Spec, conventions, known "
+            "hazards, acceptance evidence, and manual playtest gaps. Update the "
+            "existing idempotent review comment."
         )
-
+    if trigger == "issue_comment":
+        return (
+            f"{context}\n\nA human commented on managed issue #{issue}. Read the "
+            "issue and comments, determine whether a question or proposal was "
+            "answered, and respond without expanding scope."
+        )
+    if trigger == "issues" and action == "labeled":
+        return (
+            f"{context}\n\nProcess label `{label}` on issue #{issue}. If it is "
+            "an approval label, locate the exact proposal marker, perform only "
+            "the authorized operation, and consume the approval after success."
+        )
     if trigger == "issues":
-        action = os.environ.get("GITHUB_EVENT_ACTION", "opened")
-        issue_number = os.environ.get("ISSUE_NUMBER", "")
-
-        if action == "labeled":
-            label = os.environ.get("GITHUB_EVENT_LABEL_NAME", "")
-            if label == "ready-for-planning":
-                return (
-                    f"Issue #{issue_number} was labeled ready-for-planning. "
-                    "Read the issue, its linked spec and design docs, create a "
-                    "todo list, and post a task breakdown as a comment."
-                )
-            if label == "ready-for-scaffold":
-                return (
-                    f"Issue #{issue_number} was labeled ready-for-scaffold. "
-                    "Create a branch from main named agent/<issue-number>-<slug>, "
-                    "then open one draft PR with file stubs and TODOs matching "
-                    "repo conventions. Reference the task issue and parent spec."
-                )
-            return (
-                f"Issue #{issue_number} received label '{label}'. "
-                "Assess whether this label requires agent action and respond "
-                "appropriately."
-            )
-
-        if action == "edited":
-            return (
-                f"Issue #{issue_number} was edited. Re-read it and re-triage "
-                "if the body changed substantially. Do not act on minor edits."
-            )
-
-        # Default: issue opened
         return (
-            f"Issue #{issue_number} was opened. Read the issue and determine "
-            "its type from the labels or body. "
-            "If type:spec — review the spec, check consistency, ask questions, "
-            "and generate a task breakdown. "
-            "If type:bug — assign severity, attempt root-cause analysis, propose "
-            "a fix plan, and ask for confirmation. "
-            "If type:feature — read linked spec, assign area/discipline labels, "
-            "and assign a milestone. "
-            "If untyped — assign type, area, and discipline labels. Check for "
-            "duplicates. Ask the human if unclassifiable."
+            f"{context}\n\nRead issue #{issue}. For opened/edited issues, review "
+            "type, parent links, duplicates, taxonomy, acceptance criteria, and "
+            "ambiguity. Post questions or an idempotent proposal; do not treat "
+            "the issue itself as approval."
         )
-
-    # Fallback for unknown triggers
-    return (
-        f"Triggered by {trigger}. Review the repository state and report any "
-        "issues that need attention."
-    )
+    return f"{context}\n\nInspect the relevant state and report safely."
 
 
 async def _main() -> None:
-    dry_run = os.environ.get("DRY_RUN", "false").lower() == "true"
+    if _env("SDLC_AGENT_ENABLED", "false").lower() != "true":
+        raise RuntimeError("SDLC agent is disabled by SDLC_AGENT_ENABLED.")
 
+    dry_run = _env("DRY_RUN", "false").lower() == "true"
+    model = _env("DEEPSEEK_MODEL", "deepseek-v4-pro")
     if dry_run:
-        print("[DRY RUN] No GitHub writes will be performed.")
-        print(f"[DRY RUN] Prompt:\n{_build_prompt()}")
-        return
+        print("[DRY RUN] Mutation tools will return previews only.")
 
-    agent_kwargs: dict = {
-        "client": OpenAIChatCompletionClient(
-            model=os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-pro"),
-            base_url="https://api.deepseek.com",
-            api_key=os.environ["DEEPSEEK_API_KEY"],
-        ),
-        "name": "sdlc-agent",
-        "agent_instructions": SDL_AGENT_INSTRUCTIONS,
-        "tools": [
-            add_labels,
-            comment_on_issue,
-            create_branch,
-            create_issue,
-            create_pull_request,
-            get_issue,
-            read_repo_file,
-            run_build,
-            run_typecheck,
-            search_issues,
-            update_issue,
-        ],
-        "max_context_window_tokens": 128_000,
-        "max_output_tokens": 16_384,
-        "loop_max_iterations": 15,
-    }
-
-    agent_kwargs["file_memory_store"] = FileSystemAgentFileStore(
-        root_directory="./.github/agent-memory",
+    client = OpenAIChatCompletionClient(
+        model=model,
+        base_url="https://api.deepseek.com",
+        api_key=os.environ["DEEPSEEK_API_KEY"],
     )
-    agent_kwargs["loop_should_continue"] = todos_remaining()
-
-    agent = create_harness_agent(**agent_kwargs)
+    tools = [
+        read_repo_file,
+        search_issues,
+        get_issue,
+        get_pull_request,
+        get_check_runs,
+        get_review_comments,
+        comment_on_issue,
+        add_taxonomy_labels,
+        replace_status_label,
+        record_plan_approval,
+        create_issue,
+        update_issue,
+        create_branch,
+        upsert_repo_file,
+        create_or_update_draft_pr,
+        run_npm_ci,
+        run_typecheck,
+        run_build,
+    ]
+    agent = create_harness_agent(
+        client=client,
+        name="sdlc-agent",
+        agent_instructions=SDLC_AGENT_INSTRUCTIONS,
+        tools=tools,
+        max_context_window_tokens=128_000,
+        max_output_tokens=16_384,
+        loop_should_continue=todos_remaining(),
+        loop_max_iterations=10,
+        disable_file_memory=True,
+        disable_file_access=True,
+        disable_web_search=True,
+    )
 
     prompt = _build_prompt()
-    print(f"Trigger: {os.environ.get('TRIGGER_EVENT', 'manual')}")
-    print(f"Model: {os.environ.get('DEEPSEEK_MODEL', 'deepseek-v4-pro')}")
-
+    print(f"Trigger: {_env('TRIGGER_EVENT', 'workflow_dispatch')}")
+    print(f"Model: {model}")
     session = agent.create_session()
     response = await agent.run(prompt, session=session)
     print(f"\nAgent response:\n{response.text}")
 
+    if not dry_run and _env("GITHUB_EVENT_LABEL_NAME").startswith("approve:"):
+        result = await consume_current_approval()
+        print(f"\nApproval: {result}")
+
 
 def main() -> None:
+    if not os.environ.get("GITHUB_ACTIONS"):
+        load_dotenv()
     asyncio.run(_main())
 
 
