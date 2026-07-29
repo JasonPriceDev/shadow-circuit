@@ -1,0 +1,48 @@
+name: SDLC Issue Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Update managed issue blocks and workflow status labels"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: agents/requirements.txt
+
+      - name: Install dependencies
+        run: python -m pip install --requirement agents/requirements.txt
+
+      - name: Validate artifact graph
+        run: python scripts/sdlc/traceability.py validate
+
+      - name: Preview synchronization
+        if: ${{ !inputs.apply }}
+        run: python scripts/sdlc/sync_issues.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply synchronization
+        if: ${{ inputs.apply }}
+        run: python scripts/sdlc/sync_issues.py --apply
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SDLC_SYNC_APPROVED: "true"

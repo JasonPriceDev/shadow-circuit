@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sync SDLC"
+  short_description: "Assess traceability drift and issue impact"
+  default_prompt: "Use $sync-sdlc to assess upstream changes and synchronize affected SDLC artifacts."

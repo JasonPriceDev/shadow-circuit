@@ -1,7 +1,14 @@
-"""Repository metadata and SDLC taxonomy."""
+"""Repository metadata and SDLC policy."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 import os
+
+
+def _approvers() -> tuple[str, ...]:
+    raw = os.environ.get("SDLC_APPROVERS", "JasonPriceDev")
+    return tuple(value.strip() for value in raw.split(",") if value.strip())
 
 
 @dataclass(frozen=True)
@@ -10,7 +17,9 @@ class RepoConfig:
     repo: str = "shadow-circuit"
     default_branch: str = "main"
     agent_label: str = "agent:generated"
-    branch_prefix: str = "agent/task-"
+    task_branch_prefix: str = "agent/task-"
+    discovery_branch_prefix: str = "agent/discovery-"
+    max_discovery_files_per_run: int = 8
 
     milestones: tuple[str, ...] = (
         "v0.1 Vertical Slice",
@@ -20,6 +29,7 @@ class RepoConfig:
         "v1.0 Shadow Citadel & Release",
     )
     type_labels: tuple[str, ...] = (
+        "type:concept",
         "type:spec",
         "type:epic",
         "type:feature",
@@ -53,6 +63,7 @@ class RepoConfig:
     )
     status_labels: tuple[str, ...] = (
         "status:proposed",
+        "status:needs-review",
         "status:triaged",
         "status:ready",
         "status:in-progress",
@@ -62,23 +73,38 @@ class RepoConfig:
         "status:blocked",
     )
     approval_labels: tuple[str, ...] = (
+        "approve:spec",
         "approve:plan",
         "approve:create-issues",
         "approve:implement",
         "approve:revise",
         "approve:close",
     )
-    approvers: tuple[str, ...] = field(
-        default_factory=lambda: ("JasonPriceDev",),
+    approvers: tuple[str, ...] = field(default_factory=_approvers)
+    discovery_paths: tuple[str, ...] = (
+        "docs/discovery/",
+        "docs/specs/",
+        "docs/mockups/",
+        "prototypes/",
+        "docs/sdlc/",
     )
     restricted_paths: tuple[str, ...] = (
+        ".devcontainer/",
         ".github/workflows/",
         ".github/CODEOWNERS",
         ".github/copilot-instructions.md",
         ".github/instructions/",
+        ".github/agents/",
+        ".github/skills/",
         "AGENTS.md",
-        "agents/sdlc_agent/instructions.py",
-        "agents/requirements.txt",
+        "agents/",
+        "scripts/sdlc/",
+        "docs/plans/",
+        "docs/discovery/",
+        "docs/specs/",
+        "docs/mockups/",
+        "docs/sdlc/",
+        "prototypes/",
         "package.json",
         "package-lock.json",
     )

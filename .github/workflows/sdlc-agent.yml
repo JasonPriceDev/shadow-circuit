@@ -7,8 +7,12 @@ on:
     types: [created, edited]
   pull_request:
     types: [opened, synchronize]
+  pull_request_review:
+    types: [submitted, edited]
+  pull_request_review_comment:
+    types: [created, edited]
   schedule:
-    # GitHub cron uses UTC. This runs at 08:00 MDT / 07:00 MST in Edmonton.
+    # 08:00 MDT / 07:00 MST in Edmonton. GitHub cron uses UTC.
     - cron: "0 14 * * 1-5"
   workflow_dispatch:
     inputs:
@@ -17,7 +21,7 @@ on:
         required: true
         type: string
       dry_run:
-        description: "Prevent all GitHub and repository mutations"
+        description: "Prevent GitHub and repository mutations"
         required: true
         type: boolean
         default: true
@@ -40,7 +44,7 @@ jobs:
       ${{
         vars.SDLC_AGENT_ENABLED == 'true' &&
         (
-          github.event_name != 'pull_request' ||
+          !startsWith(github.event_name, 'pull_request') ||
           github.event.pull_request.head.repo.full_name == github.repository
         )
       }}
@@ -77,6 +81,12 @@ jobs:
           TRIGGER_EVENT: ${{ github.event_name }}
           GITHUB_EVENT_ACTION: ${{ github.event.action || '' }}
           GITHUB_EVENT_LABEL_NAME: ${{ github.event.label.name || '' }}
+          GITHUB_EVENT_COMMENT_BODY: >-
+            ${{
+              github.event.comment.body ||
+              github.event.review.body ||
+              ''
+            }}
           ISSUE_NUMBER: ${{ github.event.issue.number || '' }}
           PR_NUMBER: ${{ github.event.pull_request.number || '' }}
           MANUAL_PROMPT: ${{ inputs.prompt || '' }}
@@ -87,3 +97,4 @@ jobs:
               false
             }}
           SDLC_AGENT_ENABLED: ${{ vars.SDLC_AGENT_ENABLED || 'false' }}
+          SDLC_APPROVERS: ${{ vars.SDLC_APPROVERS || 'JasonPriceDev' }}

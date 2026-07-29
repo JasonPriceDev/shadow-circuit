@@ -1,31 +1,30 @@
 name: Epic
-description: Define a large delivery stream within an approved Spec.
+description: Track a large delivery stream within an approved Spec.
 title: "[Epic]: "
 labels:
   - "type:epic"
   - "status:proposed"
 body:
-  - type: markdown
+  - type: input
+    id: artifact-id
     attributes:
-      value: |
-        Use an Epic only when an approved Spec contains multiple independently
-        valuable Features. Agent-created Epics receive the `agent:generated`
-        label through the mutation tool, not from this human-facing template.
+      label: Artifact ID
+      placeholder: EPIC-vertical-slice
+    validations:
+      required: true
 
   - type: input
     id: parent-spec
     attributes:
       label: Parent Spec
-      description: Number of the approved `type:spec` issue.
-      placeholder: "#100"
+      placeholder: "#100 / SPEC-core-gameplay"
     validations:
       required: true
 
   - type: textarea
     id: outcome
     attributes:
-      label: Epic outcome
-      description: Describe the coherent delivery stream and its value.
+      label: Independently valuable outcome
     validations:
       required: true
 
@@ -33,7 +32,6 @@ body:
     id: acceptance
     attributes:
       label: Acceptance criteria
-      description: Define how completion of this Epic can be verified.
       value: |
         - [ ]
         - [ ]
@@ -44,7 +42,6 @@ body:
     id: dependencies
     attributes:
       label: Dependencies and sequencing
-      description: Link prerequisite work and describe ordering constraints.
     validations:
       required: false
 
@@ -52,24 +49,14 @@ body:
     id: area
     attributes:
       label: Primary area
-      description: The agent maps this value to the corresponding `area:*` label.
-      options:
-        - "player"
-        - "enemy"
-        - "boss"
-        - "stage"
-        - "systems"
-        - "ui"
-        - "build"
-        - "ci"
-        - "agent"
+      options: [player, enemy, boss, stage, systems, ui, build, ci, agent]
     validations:
       required: true
 
   - type: checkboxes
     id: scope
     attributes:
-      label: Scope check
+      label: Scope
       options:
-        - label: This work is large enough to require multiple independently valuable Features.
+        - label: This work requires multiple independently valuable Features.
           required: true
