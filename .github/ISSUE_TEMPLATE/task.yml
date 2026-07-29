@@ -1,27 +1,23 @@
 name: Task
-description: Define one bounded, implementable unit with at most one pull request.
+description: Define one bounded implementation unit with at most one pull request.
 title: "[Task]: "
 labels:
   - "type:task"
   - "status:proposed"
 body:
-  - type: markdown
+  - type: input
+    id: artifact-id
     attributes:
-      value: |
-        A Task is the implementation boundary. Its scope, acceptance criteria,
-        and likely files must be reviewable as one pull request. Submitting this
-        form does not authorize implementation; the matching proposal requires
-        the single-use `approve:implement` label.
-
-        Agent-created Tasks receive `agent:generated` through the mutation tool,
-        not from this human-facing template.
+      label: Artifact ID
+      placeholder: TASK-player-invulnerability
+    validations:
+      required: true
 
   - type: input
     id: parent
     attributes:
       label: Parent Spec or Feature
-      description: Use the direct `type:spec` parent for normal work or `type:feature` for a larger hierarchy.
-      placeholder: "#200"
+      placeholder: "#200 / FEATURE-player-damage"
     validations:
       required: true
 
@@ -29,16 +25,14 @@ body:
     id: root-spec
     attributes:
       label: Root Spec
-      description: Number of the approved top-level `type:spec` issue.
-      placeholder: "#100"
+      placeholder: "#100 / SPEC-core-gameplay"
     validations:
       required: true
 
   - type: textarea
-    id: description
+    id: change
     attributes:
-      label: Bounded change
-      description: Describe one implementable unit and explicitly identify what is out of scope.
+      label: Bounded change and non-goals
     validations:
       required: true
 
@@ -46,7 +40,6 @@ body:
     id: acceptance
     attributes:
       label: Acceptance criteria
-      description: Include change-specific outcomes; standard build gates are already part of Definition of Done.
       value: |
         - [ ]
         - [ ]
@@ -57,11 +50,10 @@ body:
     id: verification
     attributes:
       label: Verification
-      description: List applicable automated checks and manual playtest evidence.
       value: |
         - [ ] `npm run typecheck`
         - [ ] `npm run build`
-        - [ ] Manual playtest or runtime verification completed when required
+        - [ ] Focused runtime or playtest evidence when required
     validations:
       required: true
 
@@ -69,10 +61,6 @@ body:
     id: files
     attributes:
       label: Expected files or symbols
-      description: Name expected paths and symbols without relying on line numbers.
-      placeholder: |
-        - Create `src/components/Invulnerability.ts`
-        - Modify the player/enemy collision callback in `src/scenes/StageScene.ts`
     validations:
       required: true
 
@@ -80,17 +68,7 @@ body:
     id: area
     attributes:
       label: Primary area
-      description: The agent maps this value to the corresponding `area:*` label.
-      options:
-        - "player"
-        - "enemy"
-        - "boss"
-        - "stage"
-        - "systems"
-        - "ui"
-        - "build"
-        - "ci"
-        - "agent"
+      options: [player, enemy, boss, stage, systems, ui, build, ci, agent]
     validations:
       required: true
 
@@ -98,20 +76,14 @@ body:
     id: discipline
     attributes:
       label: Primary discipline
-      description: The agent maps this value to the corresponding `discipline:*` label.
-      options:
-        - "code"
-        - "art"
-        - "audio"
-        - "design"
-        - "qa"
+      options: [code, art, audio, design, qa]
     validations:
       required: true
 
   - type: checkboxes
     id: scope
     attributes:
-      label: Scope check
+      label: Scope
       options:
         - label: This Task can be implemented and reviewed as at most one pull request.
           required: true

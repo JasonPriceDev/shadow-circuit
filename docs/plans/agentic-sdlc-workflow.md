@@ -1,4 +1,4 @@
-# Agentic SDLC Workflow — Harness-Based Plan
+# Agentic SDLC Workflow
 
 Status: **Draft for review**
 
@@ -6,635 +6,321 @@ Last revised: **2026-07-27**
 
 ## 1. Purpose
 
-This document defines the issue, specification, implementation, review, and
-release workflow for Shadow Circuit. A single Microsoft Agent Framework harness
-agent assists with planning and execution while GitHub provides the durable
-control plane.
+This workflow takes Shadow Circuit from product concept through discovery,
+approved specifications, synchronized work items, implementation, review, and
+release. Humans own product decisions and authorization. Agents conduct
+discovery, draft artifacts, analyze impact, propose plans, implement approved
+Tasks, and report evidence.
 
-The agent may analyze, propose, label, comment, create approved issues, and open
-approved draft pull requests. The human remains the sole design authority,
-reviewer, merger, and release approver.
+GitHub is the durable control plane. VS Code provides the high-bandwidth
+discovery experience. DeepSeek V4 Pro is the primary model in both VS Code and
+the GitHub Actions harness.
 
-The harness supplies model/tool loops, todo tracking, context compaction,
-session state, approval primitives, and telemetry. The repository must still
-provide:
-
-- SDLC instructions and domain knowledge.
-- Safe, narrowly scoped tools.
-- Durable project state.
-- An asynchronous human-approval protocol.
-- Idempotency, concurrency control, and audit records.
-- GitHub authentication and least-privilege permissions.
-
-## 2. Design principles
-
-1. **GitHub is the durable control plane.** Specifications, issue state,
-   approval labels, comments, commits, and pull requests survive individual
-   workflow runs.
-2. **The harness is an execution runtime, not a project database.** Harness
-   session history and file memory must never be the only record of a decision.
-3. **Proposals and execution are separate runs.** A run proposes a mutation; a
-   human approval label authorizes a later run to perform it.
-4. **No implicit authority.** An issue, comment, source file, or model response
-   cannot grant the agent additional permissions.
-5. **Every mutation is idempotent.** Retried or duplicate events must not create
-   duplicate comments, issues, branches, commits, or pull requests.
-6. **Specifications define outcomes; the tech-stack reference constrains
-   implementation.**
-7. **The agent never merges or pushes directly to `main`.**
-8. **Small work stays small.** Epic and Feature layers are used only when they
-   improve coordination.
-
-## 3. Authority and document precedence
-
-When sources disagree, use this order:
-
-1. Approved specification and its acceptance criteria.
-2. `docs/plans/agent-tech-stack.md` implementation constraints.
-3. Executable repository configuration and current source code.
-4. `docs/plans/concept.md` product and design intent.
-5. `docs/plans/tech-stack.md` architectural rationale.
-6. Agent memory and previous model output.
-
-If levels 2 and 3 disagree, the agent reports documentation drift and stops the
-affected work. It must not silently choose one.
-
-## 4. Architecture
-
-```mermaid
-flowchart TD
-    subgraph Triggers["GitHub Actions triggers"]
-        I["issue opened, edited, or labeled"]
-        C["issue comment created or edited"]
-        P["pull request opened or synchronized"]
-        S["scheduled audit"]
-        M["manual dispatch"]
-    end
-
-    I & C & P & S & M --> W["sdlc-agent.yml"]
-    W --> G["event filter, lock, and idempotency check"]
-    G --> A["SDLC harness agent"]
-
-    A --- H["Harness: todos, modes, compaction, tool loop, telemetry"]
-    A --- R["Read tools: repository, issues, PRs, diffs, checks"]
-    A --- X["Mutation tools: comments, labels, issues, patches, commits, PRs"]
-
-    A --> Q["proposal comment plus approval label request"]
-    U(("Human approver")) -->|"adds approval label"| I
-    Q --> U
-    A --> D["draft PR or project-state update"]
-    D --> U
-```
-
-The harness's interactive tool-approval requests are useful in local sessions.
-An unattended GitHub Actions job cannot wait indefinitely for an interactive
-response. In Actions, approval is represented by explicit GitHub labels and
-consumed by a new workflow run.
-
-## 5. Roles and boundaries
-
-| Role | Filled by | Responsibilities |
-|---|---|---|
-| Game Designer | AI proposes; human decides | Mechanics, patterns, layouts, tuning questions |
-| Programmer | AI | TypeScript/Phaser changes within an approved Task |
-| Pixel Artist | AI for placeholders/specifications | Placeholder textures and asset requirements |
-| Audio/Composer | AI for specifications | Track lists, SFX cues, and integration requirements |
-| QA/Playtester | AI plus human | Automated checks and manual playtest checklists |
-| Producer/PM | AI proposes; human controls priority | Backlog hygiene, dependencies, milestones |
-| Approver | Human | Specifications, plans, implementation authorization, merge, release |
-
-The agent may make routine engineering decisions that are already constrained by
-an approved spec and the tech-stack reference. It must ask before making a new
-product decision, changing acceptance criteria, adding scope, or choosing among
-materially different designs.
-
-## 6. Work hierarchy
-
-The default hierarchy is:
+## 2. Lifecycle
 
 ```text
-Spec → Task → Pull Request
+Concept
+  → Discovery interview
+  → Draft discovery package
+      ├─ decisions and open questions
+      ├─ draft Spec or Specs
+      ├─ screen mockups or prototype
+      └─ proposed delivery breakdown
+  → Human review and revision
+  → Approved Specs
+  → Approved plan and synchronized issues
+  → Approved Tasks
+  → Draft implementation PRs
+  → Human review, playtest, merge, and release
 ```
 
-For larger work:
-
-```text
-Spec → Epic → Feature → Task → Pull Request
-```
-
-Use an Epic only when work spans multiple independently valuable Features. Use a
-Feature only when it requires multiple independently reviewable Tasks. Each
-Task corresponds to at most one implementation pull request.
-
-### 6.1 Type labels
-
-- `type:spec`
-- `type:epic`
-- `type:feature`
-- `type:task`
-- `type:bug`
-- `type:chore`
-- `type:research`
-
-### 6.2 Area labels
-
-- `area:player`
-- `area:enemy`
-- `area:boss`
-- `area:stage`
-- `area:systems`
-- `area:ui`
-- `area:build`
-- `area:ci`
-- `area:agent`
-
-### 6.3 Discipline labels
-
-- `discipline:code`
-- `discipline:art`
-- `discipline:audio`
-- `discipline:design`
-- `discipline:qa`
-
-### 6.4 Severity labels
-
-- `severity:critical` — crash, broken build, data loss, or unplayable game.
-- `severity:major` — materially incorrect behavior or blocked gameplay.
-- `severity:minor` — cosmetic issue, isolated edge case, or polish.
-
-### 6.5 Status labels
-
-- `status:proposed`
-- `status:triaged`
-- `status:ready`
-- `status:in-progress`
-- `status:in-review`
-- `status:playtest`
-- `status:done`
-- `status:blocked`
-
-Only one primary `status:*` label may be present at a time.
-
-### 6.6 Approval labels
-
-- `approve:plan`
-- `approve:create-issues`
-- `approve:implement`
-- `approve:revise`
-- `approve:close`
-
-Approval labels are single-use capabilities. The workflow removes the label
-after recording and consuming it. Approval is valid only for the proposal
-identifier included in the agent's comment; a changed proposal requires new
+No downstream phase is authorized by an upstream draft. Silence is never
 approval.
 
-### 6.7 Provenance label
+## 3. Interaction surfaces
 
-- `agent:generated`
-
-The mutation tool applies `agent:generated` only when the agent creates the
-issue or pull request. Human-facing issue templates must not include this label
-by default. Machine-readable operation markers remain the authoritative
-idempotency record.
-
-## 7. Specification-driven development
-
-Specifications live in `docs/specs/`. Each specification covers one coherent
-outcome and uses this minimum format:
-
-```markdown
-# Spec: [Title]
-
-Status: Draft | Approved | In Progress | Done
-Owner: [human owner]
-Last updated: YYYY-MM-DD
-
-## Summary
-[What this is and why it matters.]
-
-## Acceptance Criteria
-- [ ] Observable criterion
-
-## Design Notes
-[Mechanics, patterns, layout, tuning, and constraints.]
-
-## Dependencies
-[Required prior work.]
-
-## Risks and Open Questions
-[Unknowns and decisions still required.]
-
-## Verification
-[Automated checks and manual playtest evidence.]
-```
-
-### 7.1 Specification lifecycle
-
-1. A human writes or revises a specification.
-2. A `type:spec` issue links to the exact specification path.
-3. The agent reviews consistency, dependencies, testability, and open questions.
-4. The agent posts questions or a proposed plan with a stable proposal ID.
-5. The human answers through an issue comment.
-6. The `issue_comment` trigger reruns the reviewer.
-7. The human adds `approve:plan`.
-8. The agent records the approved plan.
-9. The agent proposes Task issues and, for large work, optional Epic/Feature
-   issues.
-10. The human adds `approve:create-issues`.
-11. The agent creates missing issues idempotently and links them to their
-    parents.
-12. Each Task is authorized independently with `approve:implement`.
-
-The agent must never interpret silence as approval.
-
-## 8. Bug workflow
-
-1. A human opens a `type:bug` issue describing reproduction steps, expected
-   behavior, actual behavior, affected scene/system, and available errors.
-2. The agent checks for duplicates, assigns area and severity, reads relevant
-   code, and posts its evidence.
-3. The agent proposes a bounded fix plan and verification checklist.
-4. The human adds `approve:implement`.
-5. The agent creates or reuses a deterministic branch and implements the fix.
-6. The agent runs all required checks and opens or updates one draft PR.
-7. Runtime behavior receives a human playtest checklist.
-8. The human reviews and merges.
-
-Critical bugs take priority over feature work, but they still require explicit
-implementation approval unless emergency policy is separately documented.
-
-## 9. Agent tools
-
-### 9.1 Read-only tools
-
-| Tool | Purpose |
+| Surface | Use |
 |---|---|
-| `read_repo_file(path)` | Read a UTF-8 file from the checked-out repository |
-| `search_issues(query)` | Search issues and existing proposal markers |
-| `get_issue(number)` | Read an issue and comments |
-| `get_pull_request(number)` | Read PR metadata, changed files, and patches |
-| `get_check_runs(ref)` | Read CI check status and URLs |
-| `get_review_comments(number)` | Read actionable review feedback |
+| VS Code Chat — Discovery agent | Live interview; one question at a time |
+| VS Code Chat — Spec Prototyper | Draft Specs, mockups, and prototypes |
+| VS Code Chat — Delivery Planner | Work breakdown and impact assessment |
+| VS Code Chat — SDLC Engineer | Local implementation of one approved Task |
+| GitHub Concept issue | Durable discovery thread and approval target |
+| Draft discovery PR | Review and revision of Specs/prototypes |
+| GitHub Task issue | Approved implementation boundary |
+| Draft implementation PR | Code review and evidence |
+| GitHub Actions SDLC harness | Asynchronous triage, revisions, planning, and implementation |
 
-### 9.2 Mutation tools
+The VS Code Agents window and main Chat view use the same agent sessions.
+GitHub remains authoritative even when discovery occurs in VS Code.
 
-| Tool | Required authorization |
+## 4. Roles
+
+| Role | Agent/human responsibility |
 |---|---|
-| `comment_on_issue(number, body, marker)` | Allowed for managed issues; dry-run aware |
-| `replace_status_label(number, status)` | Allowed except `status:done`; dry-run aware |
-| `add_taxonomy_labels(number, labels)` | Allowed for managed issues; dry-run aware |
-| `record_plan_approval(proposal_id)` | `approve:plan` |
-| `create_issue(..., proposal_id, item_id)` | `approve:create-issues` |
-| `update_issue(...)` | Matching approval when scope/state changes materially |
-| `create_branch(name, proposal_id, base_sha)` | `approve:implement` |
-| `upsert_repo_file(..., expected_sha)` | `approve:implement` or `approve:revise` |
-| `create_or_update_draft_pr(...)` | `approve:implement` |
+| Product owner/approver | Human confirms decisions, priorities, Specs, plans, merges, and releases |
+| Discovery facilitator | Agent challenges ambiguity and records confirmed decisions |
+| Game/product designer | Agent proposes; human decides mechanics, tuning, flows, and presentation |
+| Spec author | Agent writes coherent, testable draft Specs |
+| Prototype designer | Agent creates reviewable SVG, HTML/CSS, or isolated Phaser artifacts |
+| Producer/planner | Agent proposes hierarchy, dependencies, milestones, and impact |
+| Programmer | Agent implements one approved Task |
+| QA/playtester | Agent runs automation and writes checklists; human observes gameplay |
+| Pixel artist/audio designer | Agent writes briefs and placeholders; finished assets require suitable tools and human review |
 
-After a successful protected operation, the runner consumes the triggering
-approval label and records an audit comment. It does not consume an approval
-when the required operation fails.
+The GitHub Actions harness is one orchestration agent using scoped tools. The
+VS Code custom-agent profiles provide focused interactive roles.
 
-All path-taking tools reject absolute paths, traversal, symlink escape, and
-modification outside an allowlist. Changes to these paths require a separate
-human-authored PR and are denied to the agent by default:
+## 5. Durable artifacts and ownership
 
-- `.github/workflows/`
-- `.github/CODEOWNERS`
-- `AGENTS.md` and `.github/instructions/`
-- `agents/sdlc_agent/instructions.py`
-- Agent authentication or permission configuration
-- Dependency manifests and lockfiles
+| Information | Canonical source |
+|---|---|
+| Product intent | `docs/plans/concept.md` |
+| Confirmed discovery decisions | `docs/discovery/<concept>/decisions.md` |
+| Requirements and acceptance criteria | `docs/specs/*.md` |
+| Artifact IDs and relationships | `docs/sdlc/manifest.json` |
+| Approved artifact fingerprints | `docs/sdlc/state.json` |
+| Discussion and requested changes | GitHub comments and reviews |
+| Workflow state | GitHub `status:*` labels |
+| Implementation scope | Task issue plus parent Spec |
+| Implementation evidence | Pull requests and CI |
 
-### 9.3 Local validation tools
+Generated GitHub issue blocks are mirrors. Humans edit the canonical artifact or
+manifest, not the marker-delimited block.
 
-- `run_npm_ci()`
-- `run_typecheck()`
-- `run_build()`
-- `run_lint()` once defined
-- `run_tests()` once defined
+## 6. Concept discovery
 
-Command tools use a fixed command allowlist; the model cannot supply arbitrary
-shell text.
+### 6.1 Starting discovery
 
-## 10. Idempotency and concurrency
+Open a `type:concept` issue and link `docs/plans/concept.md`, or select the
+Discovery agent in VS Code and request:
 
-Every generated object contains a machine-readable marker:
+> Interview me about `docs/plans/concept.md`. Ask one question at a time,
+> challenge assumptions, and record only confirmed decisions.
+
+Concept submission authorizes draft artifacts under:
+
+- `docs/discovery/`
+- `docs/specs/`
+- `docs/mockups/`
+- `prototypes/`
+- `docs/sdlc/`
+
+It does not authorize production gameplay changes.
+
+### 6.2 Interview protocol
+
+The Discovery agent:
+
+1. Reads the Concept, repository, existing Specs, and constraints.
+2. Asks one focused question.
+3. Restates the proposed decision.
+4. Records it only after confirmation.
+5. Keeps assumptions and open questions separate.
+6. Challenges contradictions, untestable language, hidden dependencies, and
+   premature solutions.
+7. Stops only when the core experience and each intended Spec outcome can be
+   explained and verified.
+
+### 6.3 Discovery package
+
+The agent creates or updates:
 
 ```text
-<!-- sdlc-agent:{operation}:{subject}:{proposal-id} -->
+docs/discovery/<concept>/
+├── decisions.md
+├── assumptions.md
+└── open-questions.md
+
+docs/specs/*.md
+docs/mockups/*
+prototypes/*
 ```
 
-Before any mutation, the tool searches for its marker and returns the existing
-resource when found. Branch names are deterministic:
+It chooses one Spec or several coherent Specs based on independently reviewable
+outcomes, not document size.
+
+Prototypes are non-production evidence. They must include launch and review
+instructions. Prototype shortcuts are not requirements.
+
+## 7. Review and approval
+
+The agent uses one deterministic branch and draft PR:
 
 ```text
-agent/task-{issue-number}-{slug}
+agent/discovery-<concept-issue>-<slug>
 ```
 
-The workflow uses a concurrency group keyed by issue or PR number:
+Ordinary PR comments are discussion. An approver starts a comment or review
+with `/revise` to authorize updating the discovery package. The agent updates
+the same branch and PR idempotently.
 
-```yaml
-concurrency:
-  group: sdlc-agent-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: false
+When ready, the agent posts a proposal marker on the Concept issue:
+
+```text
+<!-- sdlc-agent:proposal:<stable-id> -->
 ```
 
-Tools use expected SHA/version checks so parallel changes fail safely instead of
-overwriting newer work.
+The human adds `approve:spec`. A later run records and consumes that exact
+approval. The human reviews and merges the discovery PR.
 
-## 11. Dry-run behavior
+## 8. Planning and work hierarchy
 
-`DRY_RUN=true` is enforced inside every mutation tool, not only in the prompt.
-In dry-run mode, mutation tools return the proposed request without calling
-GitHub or writing files. The final report lists:
+Default:
 
-- Proposed mutations.
-- Required approval labels.
-- Files that would change.
-- Validation commands that would run.
-- Estimated model/tool-call budget.
-
-## 12. Harness configuration
-
-The DeepSeek endpoint implements OpenAI-compatible Chat Completions. Therefore
-the agent uses `OpenAIChatCompletionClient`, not the Responses-oriented
-`OpenAIChatClient`.
-
-```python
-import os
-
-from agent_framework import create_harness_agent, todos_remaining
-from agent_framework.openai import OpenAIChatCompletionClient
-
-client = OpenAIChatCompletionClient(
-    model=os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-pro"),
-    base_url="https://api.deepseek.com",
-    api_key=os.environ["DEEPSEEK_API_KEY"],
-)
-
-agent = create_harness_agent(
-    client=client,
-    name="sdlc-agent",
-    agent_instructions=SDLC_AGENT_INSTRUCTIONS,
-    tools=TOOLS,
-    max_context_window_tokens=128_000,
-    max_output_tokens=16_384,
-    loop_should_continue=todos_remaining(),
-    loop_max_iterations=10,
-)
+```text
+Concept → Spec → Task → Pull Request
 ```
 
-Before implementation, a compatibility test must verify:
+Expanded only when useful:
 
-- Harness imports against the pinned dependency versions.
-- Chat Completions tool calling through DeepSeek.
-- Thinking/reasoning parameters supported by the selected client.
-- Todo looping and maximum-iteration behavior.
-- Approval-request behavior in local interactive mode.
-- Compaction and telemetry output.
-
-Looping has a strict iteration cap. A single run may not create more than the
-configured number of issues, comments, commits, or model calls.
-
-## 13. Durable state and memory
-
-The durable record consists of:
-
-- Approved specifications.
-- Issue bodies, comments, labels, and milestones.
-- Proposal IDs and consumed approval records.
-- Git commits and pull requests.
-- A reviewed `docs/decisions/` log for lasting design decisions.
-
-Harness file memory is optional scratch state. It is not committed automatically
-and may be discarded between Actions runs. If cross-run conversational memory
-is later required, it must use a purpose-built store with retention, access
-control, and backup policy.
-
-## 14. GitHub Actions
-
-### 14.1 Agent workflow
-
-```yaml
-name: SDLC Agent
-
-on:
-  issues:
-    types: [opened, edited, labeled]
-  issue_comment:
-    types: [created, edited]
-  pull_request:
-    types: [opened, synchronize]
-  schedule:
-    - cron: "0 14 * * 1-5" # 08:00 Edmonton during MDT; 07:00 during MST
-  workflow_dispatch:
-    inputs:
-      prompt:
-        description: What should the agent analyze?
-        required: true
-        type: string
-      dry_run:
-        description: Prevent all mutations
-        required: true
-        default: true
-        type: boolean
-
-permissions:
-  contents: read
-
-concurrency:
-  group: >-
-    sdlc-agent-${{
-      github.event.issue.number ||
-      github.event.pull_request.number ||
-      github.run_id
-    }}
-  cancel-in-progress: false
-
-jobs:
-  run:
-    if: >-
-      ${{
-        vars.SDLC_AGENT_ENABLED == 'true' &&
-        (
-          github.event_name != 'pull_request' ||
-          github.event.pull_request.head.repo.full_name == github.repository
-        )
-      }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: write
-      issues: write
-      pull-requests: write
-      checks: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: agents/requirements.txt
-      - run: python -m pip install --requirement agents/requirements.txt
-      - run: python -m sdlc_agent.run
-        env:
-          PYTHONPATH: agents
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL || 'deepseek-v4-pro' }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TRIGGER_EVENT: ${{ github.event_name }}
-          GITHUB_EVENT_ACTION: ${{ github.event.action || '' }}
-          GITHUB_EVENT_LABEL_NAME: ${{ github.event.label.name || '' }}
-          ISSUE_NUMBER: ${{ github.event.issue.number || '' }}
-          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
-          MANUAL_PROMPT: ${{ inputs.prompt || '' }}
-          DRY_RUN: >-
-            ${{
-              github.event_name == 'workflow_dispatch' &&
-              inputs.dry_run ||
-              false
-            }}
-          SDLC_AGENT_ENABLED: ${{ vars.SDLC_AGENT_ENABLED || 'false' }}
+```text
+Concept → Spec → Epic → Feature → Task → Pull Request
 ```
 
-The implementation must filter `issue_comment` events to managed issues and
-ignore comments carrying the agent's own marker.
+Use an Epic for multiple independently valuable Features. Use a Feature for
+multiple independently reviewable Tasks. Each Task maps to at most one
+implementation PR.
 
-GitHub generally suppresses new workflow runs caused by `GITHUB_TOKEN`. The
-implementation must not depend on an agent-created issue, label, commit, or PR
-automatically triggering the next phase. Use one of:
+After Spec approval:
 
-1. An explicit `repository_dispatch` after a completed mutation.
-2. A deliberately scoped GitHub App installation token.
-3. A bounded continuation within the same run.
+1. The agent proposes the hierarchy with a proposal ID.
+2. The human adds `approve:plan`.
+3. The agent records the approved plan.
+4. The agent proposes the exact issue set.
+5. The human adds `approve:create-issues`.
+6. The agent creates/reuses issues using deterministic markers.
+7. Each Task receives its own `approve:implement`.
 
-The chosen mechanism must be documented and tested before live mutation is
-enabled. A fine-grained PAT is not the default.
+## 9. Upstream changes and impact
 
-### 14.2 CI workflow
+Every tracked artifact has a stable ID in `docs/sdlc/manifest.json`. The
+traceability script stores approved fingerprints in `docs/sdlc/state.json`.
 
-```yaml
-name: CI
+When an upstream file, relationship, status, or issue link changes:
 
-on:
-  push:
-  pull_request:
+1. `traceability.py impact` identifies changed artifacts and descendants.
+2. The agent reads the semantic change.
+3. Each descendant is classified:
+   - `unaffected`
+   - `needs-clarification`
+   - `needs-revision`
+   - `obsolete`
+   - `new-work`
+4. The agent posts one idempotent impact report.
+5. Affected work moves to `status:needs-review` when appropriate.
+6. Approved downstream artifacts are not automatically rewritten or closed.
+7. After human-approved revisions, the snapshot and managed issue blocks are
+   refreshed.
 
-permissions:
-  contents: read
+Scripts determine graph mechanics and drift. The model assesses meaning.
 
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+## 10. Labels
 
-jobs:
-  check:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm run build
+### Types
+
+`type:concept`, `type:spec`, `type:epic`, `type:feature`, `type:task`,
+`type:bug`, `type:chore`, `type:research`
+
+### Status
+
+`status:proposed`, `status:needs-review`, `status:triaged`, `status:ready`,
+`status:in-progress`, `status:in-review`, `status:playtest`, `status:done`,
+`status:blocked`
+
+Only one primary status label may be present.
+
+### Approval
+
+`approve:spec`, `approve:plan`, `approve:create-issues`,
+`approve:implement`, `approve:revise`, `approve:close`
+
+Approval labels are single-use capabilities tied to an exact proposal marker
+and approved actor.
+
+### Taxonomy and provenance
+
+Area, discipline, and severity labels are defined in
+`agents/sdlc_agent/config.py`. `agent:generated` is applied only to
+agent-created issues and PRs.
+
+Run the manual `SDLC Bootstrap` workflow once to create/update labels and create
+missing milestones.
+
+## 11. Tool and branch boundaries
+
+Read tools may inspect repository files, search text, read issues/PRs/checks,
+and validate traceability.
+
+Discovery writes require a Concept event or approver `/revise` and are restricted
+to discovery roots. Implementation writes require `approve:implement` or
+`approve:revise`, a deterministic `agent/task-<issue>-<slug>` branch, allowed
+paths, and expected file SHAs.
+
+The agent cannot modify its workflows, instructions, permissions, dependencies,
+lockfiles, or synchronization scripts.
+
+It never merges, writes directly to `main`, force-pushes, or deletes branches.
+
+## 12. Idempotency and concurrency
+
+Generated resources contain:
+
+```text
+<!-- sdlc-agent:<operation>:<subject>:<proposal-id> -->
 ```
 
-Add lint and tests to CI as soon as their scripts exist.
+The agent reuses matching branches, comments, issues, and PRs. GitHub workflows
+serialize by issue or PR number. File updates require expected SHAs.
 
-## 15. Trigger behavior
+GitHub generally suppresses workflow runs caused by `GITHUB_TOKEN`. Each phase
+therefore begins from an explicit human event, manual dispatch, or bounded
+continuation; no phase depends on an agent-authored event retriggering Actions.
 
-| Trigger | Behavior |
-|---|---|
-| New `type:spec` issue | Review spec and post questions or a plan proposal |
-| New `type:bug` issue | Triage, investigate, and propose a fix |
-| New untyped issue | Propose taxonomy; apply safe labels when policy permits |
-| Issue edited | Re-evaluate only when the content hash changed |
-| Human issue comment | Re-evaluate managed questions and proposals |
-| `approve:plan` | Record the referenced plan as approved |
-| `approve:create-issues` | Create the referenced issue set idempotently |
-| `approve:implement` | Implement the referenced Task on a deterministic branch |
-| PR opened | Verify single-Task scope and post a Definition-of-Done checklist |
-| PR synchronized | Re-read the diff and current checks; update the existing review comment |
-| Schedule | Produce one backlog audit; do not mutate without approval |
-| Manual dispatch | Perform requested analysis; dry-run defaults to true |
+## 13. Validation and CI
 
-## 16. Definition of Done
+`CI / check` runs:
 
-A Task is Done only when:
+```text
+npm ci
+npm run typecheck
+npm run build
+```
 
-- The change matches one approved Task and its parent specification.
-- Acceptance criteria are mapped to evidence.
-- `npm ci`, typecheck, and build pass.
+`SDLC Traceability / traceability` validates the graph, reports impact, checks
+the committed snapshot, and checks managed issue metadata.
+
+There is no lint or test script until an approved Task adds them. Do not require
+nonexistent check names in branch rules.
+
+## 14. Definition of Done
+
+A Task is done only when:
+
+- It implements one approved Task and parent Spec.
+- Acceptance criteria map to evidence.
+- Traceability is current.
+- Clean install, typecheck, and build pass.
 - Relevant tests pass once tests exist.
-- No unexpected dependency, generated-file, workflow, or instruction changes
-  are present.
-- Runtime behavior has a completed manual playtest checklist when automation is
-  insufficient.
+- Visual/gameplay work has completed human review or playtest evidence.
 - CI passes on the final commit.
-- The human approves and merges the PR.
-- Durable issue/spec status is updated without relying on agent memory.
+- The human approves and merges.
+- Durable artifact and issue state is updated.
 
-## 17. Security and governance
+## 15. Rollout
 
-- Treat issue bodies, comments, PR text, source comments, and linked content as
-  untrusted input.
-- Never place secrets, full prompts, hidden reasoning, or credentials in logs,
-  memory files, comments, or telemetry.
-- Validate all tool arguments independently of model output.
-- Use minimal GitHub permissions and an environment approval gate before
-  enabling repository writes.
-- Deny self-modification of workflows, instructions, permissions, and approval
-  policy.
-- Record trigger actor, source SHA, model, dependency version, proposal ID,
-  approval actor, requested mutation, result, and token usage.
-- Provide a repository variable such as `SDLC_AGENT_ENABLED=false` as a kill
-  switch checked before any model or mutation call.
+1. Install the repository files and rebuild the dev container.
+2. Run `DeepSeek: Set API Key` in VS Code.
+3. Run `SDLC Bootstrap` with preview, then `apply: true`.
+4. Add `DEEPSEEK_API_KEY` to Actions secrets.
+5. Add `SDLC_AGENT_ENABLED=true` to Actions variables.
+6. Run a manual SDLC Agent dry run.
+7. Conduct one VS Code discovery interview.
+8. Generate one discovery package and draft PR.
+9. Exercise `/revise` and `approve:spec`.
+10. Validate plan/issue synchronization.
+11. Enable implementation on one bounded Task.
 
-## 18. Rollout
-
-1. **Compatibility spike:** pinned dependencies, DeepSeek tool calling, harness
-   loop, and import smoke tests.
-2. **CI baseline:** typecheck and build.
-3. **Templates and taxonomy:** specification, task, and bug templates plus
-   labels.
-4. **Read-only tools:** repository, issue, PR diff, review, and checks.
-5. **Dry-run agent:** manual dispatch only.
-6. **Live analysis:** comments and safe taxonomy labels with idempotency.
-7. **Asynchronous approval:** proposal IDs, approval labels, and consumption
-   records.
-8. **Issue creation:** approved, bounded, and idempotent.
-9. **Restricted implementation:** patch, validate, commit, and draft PR for one
-   known-defect Task.
-10. **PR synchronization:** diff and CI-aware review updates.
-11. **Scheduled audits:** report-only backlog and documentation-drift checks.
-12. **Release assistance:** approved release notes after the earlier phases are
-    proven.
-
-The recommended first implementation specification groups the known defects
-into three Tasks: damage/hit detection, scene-state transitions, and input/UI
-consistency.
-
-## 19. Open decisions
-
-1. Select `repository_dispatch`, a GitHub App, or bounded same-run continuation
-   for intentional workflow chaining.
-2. Decide whether local interactive harness sessions are in scope in addition
-   to GitHub Actions.
-3. Set per-run limits for tokens, model calls, comments, issues, commits, and
-   estimated cost.
-4. Choose the initial test framework and browser/runtime smoke-test strategy.
-5. Confirm the local time desired for scheduled audits; GitHub cron is UTC and
-   does not adjust for Edmonton daylight-saving changes.
-
-## 20. References
-
-- [Microsoft Agent Framework harness release](https://devblogs.microsoft.com/agent-framework/the-microsoft-agent-framework-harness-is-now-released/)
-- [Microsoft Agent Framework harness documentation](https://learn.microsoft.com/en-us/agent-framework/agents/harness)
-- [DeepSeek API quick start](https://api-docs.deepseek.com/)
-- [GitHub `GITHUB_TOKEN` behavior](https://docs.github.com/en/actions/concepts/security/github_token)
-- [GitHub Actions token permissions](https://docs.github.com/en/actions/tutorials/authenticate-with-github_token)
+Before live implementation, verify Agent Framework imports, DeepSeek tool
+calling, iteration behavior, dry-run enforcement, approval consumption,
+expected-SHA conflicts, and duplicate-event handling.

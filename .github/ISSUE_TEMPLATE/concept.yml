@@ -1,0 +1,69 @@
+name: Concept
+description: Ask the agent to conduct discovery and draft Specs plus a prototype.
+title: "[Concept]: "
+labels:
+  - "type:concept"
+  - "status:proposed"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This starts product discovery. The agent may ask questions and create a
+        draft discovery branch, Specs, mockups, and a prototype. It may not
+        implement production gameplay.
+
+  - type: input
+    id: concept-file
+    attributes:
+      label: Concept file
+      description: Repository path to the source concept, when one exists.
+      placeholder: docs/plans/concept.md
+    validations:
+      required: false
+
+  - type: textarea
+    id: intent
+    attributes:
+      label: Product intent
+      description: Describe the experience, player, and outcome in your own words.
+    validations:
+      required: true
+
+  - type: textarea
+    id: fixed
+    attributes:
+      label: Already-decided constraints
+      description: List decisions the agent should treat as fixed.
+    validations:
+      required: false
+
+  - type: textarea
+    id: questions
+    attributes:
+      label: Decisions still open
+      description: List areas where you want alternatives or discovery questions.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: prototype
+    attributes:
+      label: Preferred discovery artifact
+      options:
+        - "Agent recommends the smallest useful artifact"
+        - "SVG screen mockups"
+        - "HTML/CSS interactive mockup"
+        - "Isolated Phaser prototype"
+        - "No prototype yet"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: authority
+    attributes:
+      label: Draft authority
+      options:
+        - label: I authorize draft discovery documents, Specs, mockups, and non-production prototype files on an agent discovery branch.
+          required: true
+        - label: I understand that production implementation still requires separate approval.
+          required: true

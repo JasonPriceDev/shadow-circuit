@@ -1,0 +1,4 @@
+interface:
+  display_name: "Discover Concept"
+  short_description: "Interview and turn concepts into draft specs"
+  default_prompt: "Use $discover-concept to interview me about this concept and prepare a discovery package."

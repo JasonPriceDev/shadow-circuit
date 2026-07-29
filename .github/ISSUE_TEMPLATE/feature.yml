@@ -1,23 +1,23 @@
 name: Feature
-description: Define an independently valuable outcome within a Spec or Epic.
+description: Track an independently valuable outcome requiring multiple Tasks.
 title: "[Feature]: "
 labels:
   - "type:feature"
   - "status:proposed"
 body:
-  - type: markdown
+  - type: input
+    id: artifact-id
     attributes:
-      value: |
-        Features are optional. Use one when an approved Spec or Epic needs
-        multiple independently reviewable Tasks. Agent-created Features receive
-        `agent:generated` through the mutation tool.
+      label: Artifact ID
+      placeholder: FEATURE-player-damage
+    validations:
+      required: true
 
   - type: input
     id: parent
     attributes:
       label: Parent Spec or Epic
-      description: Number of the direct parent `type:spec` or `type:epic` issue.
-      placeholder: "#123"
+      placeholder: "#123 / SPEC-core-gameplay"
     validations:
       required: true
 
@@ -25,8 +25,7 @@ body:
     id: root-spec
     attributes:
       label: Root Spec
-      description: Number of the top-level `type:spec` issue for traceability.
-      placeholder: "#100"
+      placeholder: "#100 / SPEC-core-gameplay"
     validations:
       required: true
 
@@ -34,7 +33,6 @@ body:
     id: outcome
     attributes:
       label: Feature outcome
-      description: Describe the independently valuable behavior or capability.
     validations:
       required: true
 
@@ -42,7 +40,6 @@ body:
     id: acceptance
     attributes:
       label: Acceptance criteria
-      description: List observable outcomes completed by this Feature's Tasks.
       value: |
         - [ ]
         - [ ]
@@ -52,11 +49,7 @@ body:
   - type: textarea
     id: files
     attributes:
-      label: Likely files or systems
-      description: Add paths or symbols when known; the plan determines the exact change set.
-      placeholder: |
-        - `src/scenes/StageScene.ts`
-        - `Player` damage handling
+      label: Likely files or symbols
     validations:
       required: false
 
@@ -64,17 +57,7 @@ body:
     id: area
     attributes:
       label: Primary area
-      description: The agent maps this value to the corresponding `area:*` label.
-      options:
-        - "player"
-        - "enemy"
-        - "boss"
-        - "stage"
-        - "systems"
-        - "ui"
-        - "build"
-        - "ci"
-        - "agent"
+      options: [player, enemy, boss, stage, systems, ui, build, ci, agent]
     validations:
       required: true
 
@@ -82,20 +65,14 @@ body:
     id: discipline
     attributes:
       label: Primary discipline
-      description: The agent maps this value to the corresponding `discipline:*` label.
-      options:
-        - "code"
-        - "art"
-        - "audio"
-        - "design"
-        - "qa"
+      options: [code, art, audio, design, qa]
     validations:
       required: true
 
   - type: checkboxes
     id: scope
     attributes:
-      label: Scope check
+      label: Scope
       options:
         - label: This outcome requires multiple independently reviewable Tasks.
           required: true

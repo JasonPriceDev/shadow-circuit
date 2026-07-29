@@ -4,14 +4,12 @@
     "dockerfile": "Dockerfile",
     "context": ".."
   },
-  "runArgs": [
-    "--env-file",
-    "${localWorkspaceFolder}/.env"
-  ],
+  "features": {
+    "ghcr.io/devcontainers/features/python:1.8.0": {
+      "version": "3.12"
+    }
+  },
   "remoteUser": "node",
-  "mounts": [
-    "source=${localEnv:HOME}/.ssh,target=/home/node/.ssh,type=bind,readonly"
-  ],
   "forwardPorts": [5173],
   "portsAttributes": {
     "5173": {
@@ -19,10 +17,12 @@
       "onAutoForward": "openBrowser"
     }
   },
-  "postCreateCommand": "./scripts/post-create.sh",
+  "postCreateCommand": "bash ./scripts/post-create.sh",
   "customizations": {
     "vscode": {
       "extensions": [
+        "GitHub.copilot",
+        "GitHub.copilot-chat",
         "dbaeumer.vscode-eslint",
         "esbenp.prettier-vscode",
         "ms-python.python",
@@ -31,23 +31,16 @@
       ],
       "settings": {
         "deepseek-copilot.baseUrl": "https://api.deepseek.com",
-        "deepseek-copilot.maxTokens": 0,
-        "z-models.openrouter.apiKey": "${env:OPENROUTER_API_KEY}",
-        "github.copilot.advanced.openAiApiKey": "${env:OPENAI_API_KEY}",
-        // "chat.defaultModel": "GPT-5.6 Terra (openai)", 
-        // "chat.exploreAgent.defaultModel": "GPT-5.6 Terra (openai)",
-        // "github.copilot.selectedCompletionModel": "GPT-5.6 Terra (openai)",
-        // "inlineChat.defaultModel": "GPT-5.6 Terra (openai)",
-        // "chat.utilitySmallModel": "openai/gpt-5.6-luna",
+        "deepseek-copilot.maxTokens": 16384,
+        "deepseek-copilot.debugMode": "minimal",
         "workbench.browser.enableChatTools": true,
         "chat.defaultModel": "DeepSeek V4 Pro (deepseek)",
         "chat.exploreAgent.defaultModel": "DeepSeek V4 Pro (deepseek)",
         "github.copilot.selectedCompletionModel": "DeepSeek V4 Pro (deepseek)",
         "inlineChat.defaultModel": "DeepSeek V4 Pro (deepseek)",
-        "chat.utilitySmallModel": "deepseek/deepseek-v4-flash"
+        "chat.utilitySmallModel": "deepseek/deepseek-v4-flash",
+        "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python"
       }
-
     }
   }
-  
 }
